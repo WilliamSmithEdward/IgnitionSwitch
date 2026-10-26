@@ -229,8 +229,8 @@ internal static class CaptureTests
             Check.That(
                 !saved.HasRecentPerformance
                     && saved.CaptureRecentPerformance().Status == CaptureStatus.NoPerformance
-                    && loaded.Version == 1,
-                "Applying a saved capture must clear transient performance while preserving schema one."
+                    && loaded.Version == 2,
+                "Applying a saved capture must clear transient performance while preserving schema two."
             );
             Check.That(
                 saved.Tracks[3].NoteCount == 1,

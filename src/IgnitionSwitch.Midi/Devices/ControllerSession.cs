@@ -19,6 +19,7 @@ internal sealed class ControllerSession : IDisposable
     private readonly CancellationTokenSource cancellation = new();
     private readonly PadHitState padHits = new(LaunchkeyMk3Profile.Model37.DrumPadLayout);
     private readonly int[] lastPadColors = new int[16];
+    private readonly string?[] lastDisplayRows = new string?[2];
     private readonly Timer activityTimer;
     private readonly Action<ControllerSession> feedbackFailed;
     private readonly List<(
@@ -128,18 +129,18 @@ internal sealed class ControllerSession : IDisposable
             enteredDawMode = true;
             SendDaw(LaunchkeyMk3Protocol.SessionPadMode());
             SendDaw(LaunchkeyMk3Protocol.DevicePotMode());
-            string[] names = [
-                "Keys volume", "Bass volume", "Pad volume", "Drums volume", "Master", "Tempo",
-                "Unassigned", "Unassigned"
-            ];
+            var initial = new ControllerFeedback(0, false, false, ["IgnitionSwitch"], [false]);
 
-            for (int knob = 0; knob < names.Length; knob++)
+            for (int knob = 0; knob < 8; knob++)
             {
-                SendDaw(LaunchkeyMk3Protocol.SetKnobName(knob, names[knob]));
+                ControllerKnobFeedback value = LaunchkeyFeedbackPresentation.KnobAt(initial, knob);
+                SendDaw(LaunchkeyMk3Protocol.SetKnobName(knob, value.Name));
+                SendDaw(LaunchkeyMk3Protocol.SetKnobValue(knob, value.Value));
             }
 
+            SendDaw(LaunchkeyMk3Protocol.SetDeviceLock(false));
             SendDaw(LaunchkeyMk3Protocol.SetDisplayRow(0, "IgnitionSwitch"));
-            SendDaw(LaunchkeyMk3Protocol.SetDisplayRow(1, "Ready to play"));
+            SendDaw(LaunchkeyMk3Protocol.SetDisplayRow(1, "Loop ready"));
         }
     }
 
@@ -155,11 +156,12 @@ internal sealed class ControllerSession : IDisposable
         lock (mappingLock)
         {
             int oldPadMode = mapper.PadMode;
+            int oldPotMode = mapper.PotMode;
             mapped = mapper.TryMap(input, out control);
             routed = performanceRouter.TryRoute(input, mapper.PadMode, out MidiInputEvent? musical)
                 ? musical!
                 : input;
-            changedMode = oldPadMode != mapper.PadMode;
+            changedMode = oldPadMode != mapper.PadMode || oldPotMode != mapper.PotMode;
             Volatile.Write(ref padMode, mapper.PadMode);
         }
 
@@ -215,10 +217,19 @@ internal sealed class ControllerSession : IDisposable
             return;
         }
 
-        if (Volatile.Read(ref padMode) == 2)
+        ControllerFeedback? previous = previousFeedback;
+        int mode = Volatile.Read(ref padMode);
+        bool sameTracks = LaunchkeyFeedbackPresentation.HasSameTrackState(previous, feedback);
+
+        if (mode == 2 && !sameTracks)
         {
             for (int pad = 0; pad < 16; pad++)
             {
+                if (Volatile.Read(ref padMode) != mode)
+                {
+                    break;
+                }
+
                 int track = pad % 8;
                 bool present = track < feedback.TrackNames.Count;
                 int color = !present
@@ -234,19 +245,65 @@ internal sealed class ControllerSession : IDisposable
             }
         }
 
-        else if (Volatile.Read(ref padMode) == 1)
+        else if (mode == 1 && !sameTracks)
         {
             PaintDrumPads(feedback, true);
         }
 
-        SendDaw(LaunchkeyMk3Protocol.SetDisplayRow(0, feedback.TrackNames[feedback.SelectedTrack]));
-        SendDaw(
-            LaunchkeyMk3Protocol.SetDisplayRow(
-                1,
-                LaunchkeyFeedbackPresentation.TransportText(feedback)
-            )
-        );
+        else if (mode == 9 && (previous is null || previous.DeviceName != feedback.DeviceName))
+        {
+            for (int pad = 0; pad < 16; pad++)
+            {
+                if (Volatile.Read(ref padMode) != mode)
+                {
+                    break;
+                }
+
+                // Every current sound device has one parameter page. Other raw pad indices
+                // are not advertised as additional devices or nonexistent parameter pages.
+                int color = pad == 0 && !string.IsNullOrEmpty(feedback.DeviceName) ? 49 : 0;
+                SendDaw(LaunchkeyMk3Protocol.SetDeviceSelectPad(pad, color));
+            }
+        }
+
+        if (previous is null || previous.DeviceLocked != feedback.DeviceLocked)
+        {
+            SendDaw(LaunchkeyMk3Protocol.SetDeviceLock(feedback.DeviceLocked));
+        }
+
+        for (int knob = 0; knob < 8; knob++)
+        {
+            ControllerKnobFeedback value = LaunchkeyFeedbackPresentation.KnobAt(feedback, knob);
+            ControllerKnobFeedback? oldValue = previous is null
+                ? null
+                : LaunchkeyFeedbackPresentation.KnobAt(previous, knob);
+
+            if (oldValue?.Name != value.Name)
+            {
+                SendDaw(LaunchkeyMk3Protocol.SetKnobName(knob, value.Name));
+            }
+
+            if (oldValue?.Value != value.Value)
+            {
+                SendDaw(LaunchkeyMk3Protocol.SetKnobValue(knob, value.Value));
+            }
+        }
+
+        string title = mode == 9 && !string.IsNullOrEmpty(feedback.DeviceName)
+            ? feedback.DeviceName
+            : feedback.TrackNames[feedback.SelectedTrack];
+        PaintDisplayRow(0, title);
+        PaintDisplayRow(1, LaunchkeyFeedbackPresentation.TransportText(feedback));
         previousFeedback = feedback;
+    }
+
+    private void PaintDisplayRow(int row, string text)
+    {
+        if (lastDisplayRows[row] != text)
+        {
+            SendDaw(LaunchkeyMk3Protocol.SetDisplayRow(row, text));
+            lastDisplayRows[row] = text;
+        }
     }
 
     public void StartWatchers(Action onRemoved)
@@ -407,6 +464,7 @@ internal sealed class ControllerSession : IDisposable
                     if (repaintMode)
                     {
                         previousFeedback = null;
+                        Array.Fill(lastDisplayRows, null);
                     }
 
                     if (target is not null)

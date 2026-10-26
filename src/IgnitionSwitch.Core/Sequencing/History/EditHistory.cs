@@ -45,8 +45,7 @@ internal sealed class EditHistory
         if (
             continuous
             && pending is { IsNoteEdit: false } current
-            && current.Scalar.Property == edit.Property
-            && current.Scalar.Track == edit.Track
+            && current.Scalar.Address == edit.Address
             && Stopwatch.GetElapsedTime(lastScalarTimestamp, timestamp) <= GestureIdle
         )
         {

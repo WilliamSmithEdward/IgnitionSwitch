@@ -2,10 +2,31 @@
 [
     ("Playable instruments produce bounded finite stereo audio", AudioTests.Instruments),
     (
+        "Normalized mixer targets share metadata, validation, stereo routing, and history",
+        SoundTests.Mixer
+    ),
+    (
+        "Tone, attack, release, drive, and drum tail change actual instrument audio",
+        SoundTests.Instruments
+    ),
+    (
+        "Stereo sends and returns preserve independent live and sequenced effect lanes",
+        SoundTests.EffectsAndLanes
+    ),
+    ("Strict legacy JSON migrates to native dry version-two sound defaults", SchemaTests.Migration),
+    (
+        "Version-two sound targets roundtrip and reject malformed settings atomically",
+        SchemaTests.RoundtripAndValidation
+    ),
+    (
         "Render quanta preserve offset guards, clock continuity, and callback partition output",
         AudioTests.RenderPartitions
     ),
     ("Sustain, note ownership, retrigger, and panic release voices", AudioTests.Release),
+    (
+        "Live attacks survive dense scheduled voice pressure within the 64-voice bound",
+        VoicePriorityTests.LiveAttacks
+    ),
     ("Transport advances from audio samples and wraps four bars", SequencingTests.Transport),
     ("Loop-off finishes the current pass and preserves transport preferences", LoopTests.Transport),
     (

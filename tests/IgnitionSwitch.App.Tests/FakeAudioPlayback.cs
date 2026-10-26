@@ -7,6 +7,7 @@ internal sealed class FakeAudioPlayback : IAudioPlayback
     public string Status => "Test audio output";
     public bool IsRunning { get; private set; } = true;
     public bool IsDisposed { get; private set; }
+    public AudioOutputMode Mode { get; set; }
 
     public void Start()
     {

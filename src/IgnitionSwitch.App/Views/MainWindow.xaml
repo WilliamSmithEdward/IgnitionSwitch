@@ -46,6 +46,39 @@
                         TextTrimming="CharacterEllipsis"
                         VerticalAlignment="Center" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                        <Button x:Name="SoundButton" Content="Sound" Style="{StaticResource QuietButtonStyle}"
+                            AutomationProperties.Name="Sound parameters">
+                            <Button.Flyout>
+                                <Flyout x:Name="SoundFlyout" Placement="BottomEdgeAlignedRight">
+                                    <ScrollViewer x:Name="SoundScroll" Width="336" MaxHeight="560"
+                                        HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled"
+                                        VerticalScrollBarVisibility="Auto">
+                                        <StackPanel Spacing="14" RequestedTheme="Dark">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="SoundTitleText" Text="Instrument"
+                                                    Style="{StaticResource FlyoutHeadingStyle}"
+                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <ToggleButton x:Name="SoundLockToggle" Grid.Column="1"
+                                                    Content="Lock" MinWidth="72" Height="32" Padding="10,0"
+                                                    CornerRadius="7" ToolTipService.ToolTip="Lock sound target"
+                                                    AutomationProperties.Name="Lock sound target" />
+                                            </Grid>
+                                            <ComboBox x:Name="SoundTargetBox" HorizontalAlignment="Stretch"
+                                                SelectedIndex="0" AutomationProperties.Name="Sound target">
+                                                <ComboBoxItem Content="Instrument" />
+                                                <ComboBoxItem Content="Echo" />
+                                                <ComboBoxItem Content="Room" />
+                                            </ComboBox>
+                                            <StackPanel x:Name="SoundParameterPanel" Spacing="10" />
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                         <Button x:Name="OpenButton" Content="Open" Style="{StaticResource QuietButtonStyle}"
                             AutomationProperties.Name="Open a session" />
                         <Button x:Name="SaveButton" Content="Save" Style="{StaticResource QuietButtonStyle}"
@@ -61,29 +94,69 @@
                                 <FontIcon Glyph="&#xE70D;" FontSize="9" VerticalAlignment="Center" />
                             </StackPanel>
                             <Button.Flyout>
-                                <Flyout Placement="BottomEdgeAlignedRight">
-                                    <StackPanel Width="290" Spacing="16" RequestedTheme="Dark">
-                                        <TextBlock Text="Devices" Style="{StaticResource FlyoutHeadingStyle}" />
-                                        <StackPanel Spacing="10">
-                                            <TextBlock Text="Controller" Style="{StaticResource SectionLabelStyle}" />
-                                            <TextBlock
-                                                x:Name="ConnectionText"
-                                                Text="Looking for your controller…"
-                                                Style="{StaticResource BodyStyle}"
-                                                AutomationProperties.LiveSetting="Polite" />
-                                            <Button x:Name="ReconnectButton" Content="Reconnect"
-                                                Style="{StaticResource QuietButtonStyle}"
-                                                HorizontalAlignment="Left"
-                                                AutomationProperties.Name="Reconnect controller and audio" />
+                                <Flyout x:Name="DevicesFlyout" Placement="BottomEdgeAlignedRight">
+                                    <ScrollViewer x:Name="DevicesScroll" HorizontalScrollBarVisibility="Disabled"
+                                        HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+                                        <StackPanel Width="290" Spacing="16" RequestedTheme="Dark">
+                                            <TextBlock Text="Devices" Style="{StaticResource FlyoutHeadingStyle}" />
+                                            <StackPanel Spacing="10">
+                                                <TextBlock Text="Controller" Style="{StaticResource SectionLabelStyle}" />
+                                                <TextBlock
+                                                    x:Name="ConnectionText"
+                                                    Text="Looking for your controller…"
+                                                    Style="{StaticResource BodyStyle}"
+                                                    AutomationProperties.LiveSetting="Polite" />
+                                                <Button x:Name="ReconnectButton" Content="Reconnect"
+                                                    Style="{StaticResource QuietButtonStyle}"
+                                                    HorizontalAlignment="Left"
+                                                    AutomationProperties.Name="Reconnect controller and audio" />
+                                            </StackPanel>
+                                            <Border Height="1" Background="{StaticResource BorderBrush}" />
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Audio output" Style="{StaticResource SectionLabelStyle}" />
+                                                <TextBlock x:Name="AudioText" Text="Preparing audio…"
+                                                    Style="{StaticResource BodyStyle}"
+                                                    AutomationProperties.LiveSetting="Polite" />
+                                                <ComboBox x:Name="AudioModeBox" Header="Playback mode"
+                                                    HorizontalAlignment="Stretch" SelectedIndex="0"
+                                                    AutomationProperties.Name="Audio playback mode"
+                                                    ToolTipService.ToolTip="Exclusive mode can reduce buffering. Other apps may be unable to play sound while it is active.">
+                                                    <ComboBoxItem Content="Shared" />
+                                                    <ComboBoxItem Content="Low latency · exclusive" />
+                                                </ComboBox>
+                                            </StackPanel>
+                                            <Expander Header="Input diagnostics" IsExpanded="False"
+                                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                                <StackPanel Spacing="10">
+                                                    <TextBlock Text="Received drum MIDI"
+                                                        Style="{StaticResource BodyStyle}" FontSize="12" />
+                                                    <Grid ColumnSpacing="12" RowSpacing="8">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+                                                        <TextBlock Text="Hits received" Style="{StaticResource BodyStyle}" />
+                                                        <TextBlock x:Name="DrumInputCountText" Grid.Column="1" Text="0"
+                                                            Style="{StaticResource BodyStyle}" />
+                                                        <TextBlock Grid.Row="1" Text="Last velocity" Style="{StaticResource BodyStyle}" />
+                                                        <TextBlock x:Name="DrumInputVelocityText" Grid.Row="1" Grid.Column="1" Text="—"
+                                                            Style="{StaticResource BodyStyle}" />
+                                                        <TextBlock Grid.Row="2" Text="Velocity range" Style="{StaticResource BodyStyle}" />
+                                                        <TextBlock x:Name="DrumInputRangeText" Grid.Row="2" Grid.Column="1" Text="—"
+                                                            Style="{StaticResource BodyStyle}" />
+                                                    </Grid>
+                                                    <Button x:Name="ResetInputCounterButton" Content="Reset counter"
+                                                        Style="{StaticResource QuietButtonStyle}" HorizontalAlignment="Left"
+                                                        AutomationProperties.Name="Reset received drum MIDI counter" />
+                                                </StackPanel>
+                                            </Expander>
                                         </StackPanel>
-                                        <Border Height="1" Background="{StaticResource BorderBrush}" />
-                                        <StackPanel Spacing="8">
-                                            <TextBlock Text="Audio output" Style="{StaticResource SectionLabelStyle}" />
-                                            <TextBlock x:Name="AudioText" Text="Preparing audio…"
-                                                Style="{StaticResource BodyStyle}"
-                                                AutomationProperties.LiveSetting="Polite" />
-                                        </StackPanel>
-                                    </StackPanel>
+                                    </ScrollViewer>
                                 </Flyout>
                             </Button.Flyout>
                         </Button>

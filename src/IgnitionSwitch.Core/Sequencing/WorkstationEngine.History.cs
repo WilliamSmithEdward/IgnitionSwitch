@@ -94,27 +94,7 @@ public sealed partial class WorkstationEngine
             ScalarEdit scalar = edit.Scalar;
             double value = reverse ? scalar.Before : scalar.After;
 
-            switch (scalar.Property)
-            {
-                case HistoryProperty.Tempo:
-                    _tempo = value;
-                    break;
-
-                case HistoryProperty.MasterVolume:
-                    _masterVolume = (float)value;
-                    break;
-
-                case HistoryProperty.TrackVolume:
-                    _tracks[scalar.Track].Volume = (float)value;
-                    break;
-
-                case HistoryProperty.TrackMute:
-                    _tracks[scalar.Track].IsMuted = value != 0;
-                    break;
-
-                default:
-                    throw new InvalidOperationException("Unsupported history property.");
-            }
+            ApplyParameterValue(scalar.Address, value);
 
             return;
         }

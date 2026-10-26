@@ -9,6 +9,7 @@ internal sealed partial class StudioSession : IDisposable
 {
     private readonly Lock inputLock = new();
     private readonly Lock feedbackLock = new();
+    private readonly PerformanceInputDiagnostics inputDiagnostics = new();
     private readonly Dictionary<(int Channel, int Note), int> noteOwners = [];
     private readonly HashSet<(int Track, int Note)> previewOwners = [];
     private readonly int[] activeNoteOwners = new int[WorkstationEngine.TrackCount * 128];
@@ -44,6 +45,25 @@ internal sealed partial class StudioSession : IDisposable
 
     public event EventHandler<PerformanceActivity>? PerformanceChanged;
     public event EventHandler? PerformanceReset;
+
+    public PerformanceInputDiagnostics.Snapshot ReadInputDiagnostics()
+    {
+        lock (inputLock)
+        {
+            return inputDiagnostics.Read();
+        }
+    }
+
+    public void ResetInputDiagnostics()
+    {
+        lock (inputLock)
+        {
+            if (!disposed)
+            {
+                inputDiagnostics.Reset();
+            }
+        }
+    }
 
     public void NoteOn(int track, int note, int velocity)
     {
@@ -133,6 +153,7 @@ internal sealed partial class StudioSession : IDisposable
                 }
 
                 interactionBlocked = value;
+                knobPickup.Reset();
 
                 if (value)
                 {
@@ -260,6 +281,9 @@ internal sealed partial class StudioSession : IDisposable
         {
             ObjectDisposedException.ThrowIf(disposed, this);
             Engine.ApplySession(snapshot);
+            soundDevice = SoundDeviceKind.Instrument;
+            soundDeviceLocked = false;
+            knobPickup.Reset();
             ClearPerformanceState();
             revision++;
         }
@@ -433,7 +457,17 @@ internal sealed partial class StudioSession : IDisposable
                         .Select(track => track.IsMuted)
                         .ToArray()
                 ),
-                Engine.LoopEnabled
+                Engine.LoopEnabled,
+                CreateKnobFeedback(),
+                soundDevice switch
+                {
+                    SoundDeviceKind.Delay => "Echo",
+                    SoundDeviceKind.Reverb => "Room",
+                    SoundDeviceKind.Instrument =>
+                        tracks[soundDeviceLocked ? lockedSoundTrack : Engine.SelectedTrack].Name,
+                    _ => tracks[soundDeviceLocked ? lockedSoundTrack : Engine.SelectedTrack].Name
+                },
+                soundDeviceLocked
             );
 
             if (
@@ -442,8 +476,12 @@ internal sealed partial class StudioSession : IDisposable
                 && previous.Playing == feedback.Playing
                 && previous.Recording == feedback.Recording
                 && previous.LoopEnabled == feedback.LoopEnabled
-                && previous.TrackNames.SequenceEqual(feedback.TrackNames)
-                && previous.TrackMuted.SequenceEqual(feedback.TrackMuted)
+                && previous.DeviceName == feedback.DeviceName
+                && previous.DeviceLocked == feedback.DeviceLocked
+                && previous.Knobs is not null
+                    && previous.Knobs.SequenceEqual(feedback.Knobs!)
+                    && previous.TrackNames.SequenceEqual(feedback.TrackNames)
+                    && previous.TrackMuted.SequenceEqual(feedback.TrackMuted)
             )
             {
                 return;
@@ -519,6 +557,12 @@ internal sealed partial class StudioSession : IDisposable
             }
 
             previousFeedback = null;
+            knobPickup.Reset();
+
+            if (Controller.IsConnected)
+            {
+                controlBank = ControllerControlBank.Device;
+            }
 
             if (!Controller.IsConnected)
             {
@@ -546,12 +590,25 @@ internal sealed partial class StudioSession : IDisposable
     {
         lock (inputLock)
         {
-            if (disposed || interactionBlocked || !double.IsFinite(control.Value))
+            if (disposed || !double.IsFinite(control.Value))
             {
                 return;
             }
 
-            ProcessControl(control);
+            if (
+                control.Kind == MusicControlKind.SelectControlBank
+                && Enum.IsDefined((ControllerControlBank)control.Index)
+            )
+            {
+                // Surface mode is context, not a project mutation. Track it during a picker so
+                // feedback and the first post-modal knob movement use the real hardware bank.
+                SelectControlBankCore((ControllerControlBank)control.Index);
+            }
+
+            else if (!interactionBlocked)
+            {
+                ProcessControl(control);
+            }
         }
 
         RefreshFeedback();
@@ -570,6 +627,12 @@ internal sealed partial class StudioSession : IDisposable
                 activeNoteOwners[(track * 128) + input.Number]++;
                 SustainTrackIfNeeded(track);
                 Engine.NoteOn(track, input.Number, input.Value, Audio.IsRunning);
+
+                if (input.Channel == 9)
+                {
+                    inputDiagnostics.RecordDrumNoteOn(input.Value);
+                }
+
                 ReportPerformance(track, input.Number, input.Value, true);
 
                 if (Engine.IsRecording)
@@ -627,6 +690,34 @@ internal sealed partial class StudioSession : IDisposable
     {
         switch (control.Kind)
         {
+            case MusicControlKind.SetKnob:
+                ProcessKnob(control);
+                break;
+
+            case MusicControlKind.SelectControlBank when Enum.IsDefined(
+                (ControllerControlBank)control.Index
+            ):
+                SelectControlBankCore((ControllerControlBank)control.Index);
+                break;
+
+            case MusicControlKind.MoveSoundDevice:
+                SelectSoundDeviceCore(
+                    (SoundDeviceKind)Math.Clamp(
+                        (int)soundDevice + Math.Clamp(control.Index, -1, 1),
+                        0,
+                        2
+                    )
+                );
+                break;
+
+            case MusicControlKind.SelectParameterPage when control.Index == 0:
+                Engine.CommitEdit();
+                break;
+
+            case MusicControlKind.ToggleSoundDeviceLock:
+                ToggleSoundDeviceLockCore();
+                break;
+
             case MusicControlKind.CaptureRecentPerformance:
                 _ = CaptureRecentPerformanceCore();
                 break;
@@ -686,22 +777,30 @@ internal sealed partial class StudioSession : IDisposable
                 break;
 
             case MusicControlKind.SetTrackVolume when IsTrack(control.Index):
-                Engine.SetTrackVolume(control.Index, (float)Math.Clamp(control.Value, 0, 1));
-                revision++;
+                _ = SetParameterCore(
+                    new(ParameterId.Level, control.Index),
+                    Math.Clamp(control.Value, 0, 1)
+                );
                 break;
 
             case MusicControlKind.SetMasterVolume:
-                Engine.MasterVolume = (float)Math.Clamp(control.Value, 0, 1);
-                revision++;
+                _ = SetParameterCore(
+                    new(ParameterId.MasterVolume),
+                    Math.Clamp(control.Value, 0, 1)
+                );
                 break;
 
             case MusicControlKind.SetTempo:
-                Engine.Tempo = Math.Clamp(control.Value, 60, 180);
-                revision++;
+                _ = SetParameterCore(
+                    new(ParameterId.Tempo),
+                    (Math.Clamp(control.Value, 60, 180) - 60) / 120
+                );
                 break;
 
             case MusicControlKind.ToggleTrackMute:
             case MusicControlKind.SetTrackVolume:
+            case MusicControlKind.SelectControlBank:
+            case MusicControlKind.SelectParameterPage:
             default:
                 break;
         }
@@ -709,7 +808,15 @@ internal sealed partial class StudioSession : IDisposable
 
     private void SelectTrackCore(int track)
     {
-        Engine.SelectedTrack = Math.Clamp(track, 0, WorkstationEngine.TrackCount - 1);
+        int selected = Math.Clamp(track, 0, WorkstationEngine.TrackCount - 1);
+
+        if (selected != Engine.SelectedTrack)
+        {
+            Engine.CommitEdit();
+            Engine.SelectedTrack = selected;
+            knobPickup.Invalidate();
+        }
+
         SustainTrackIfNeeded(Engine.SelectedTrack);
     }
 

@@ -111,5 +111,6 @@ public sealed partial class WorkstationEngine
         _isPlaying = false;
         _clickSamples = 0;
         _ = _voices.RemoveAll(static voice => voice.IsLoop);
+        _sequencedEffects.Reset();
     }
 }

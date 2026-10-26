@@ -146,25 +146,17 @@ public sealed class LaunchkeyController : IMusicController
         }
 
         // Copy caller-owned data before crossing threads or touching hardware.
-        string[] names = [.. feedback.TrackNames.Select(name => name ?? string.Empty)];
-        bool[] muted = [.. feedback.TrackMuted];
+        ControllerFeedback snapshot = LaunchkeyFeedbackPresentation.CreateSnapshot(feedback);
 
         if (
-            names.Length is < 1
-                or > 8 || names.Length != muted.Length || feedback.SelectedTrack >= names.Length
+            snapshot.TrackNames.Count is < 1
+                or > 8
+                    || snapshot.TrackNames.Count != snapshot.TrackMuted.Count
+                    || feedback.SelectedTrack >= snapshot.TrackNames.Count
         )
         {
             return;
         }
-
-        var snapshot = new ControllerFeedback(
-            feedback.SelectedTrack,
-            feedback.Playing,
-            feedback.Recording,
-            Array.AsReadOnly(names),
-            Array.AsReadOnly(muted),
-            feedback.LoopEnabled
-        );
 
         current.WriteFeedback(snapshot);
     }

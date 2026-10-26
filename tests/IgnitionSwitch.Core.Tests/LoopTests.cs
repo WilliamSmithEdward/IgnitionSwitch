@@ -91,8 +91,8 @@ internal static class LoopTests
             engine.LoopEnabled = false;
             engine.ApplySession(engine.CaptureSession());
             Check.That(
-                !engine.LoopEnabled && engine.CaptureSession().Version == 1,
-                "Project application must retain the transient loop preference without a schema change."
+                !engine.LoopEnabled && engine.CaptureSession().Version == 2,
+                "Project application must retain the transient loop preference with canonical schema two."
             );
             engine.Dispose();
             Check.Throws<ObjectDisposedException>(() => engine.LoopEnabled = true);

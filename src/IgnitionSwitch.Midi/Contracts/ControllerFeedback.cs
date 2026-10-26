@@ -7,5 +7,8 @@ public sealed record ControllerFeedback(
     bool Recording,
     IReadOnlyList<string> TrackNames,
     IReadOnlyList<bool> TrackMuted,
-    bool LoopEnabled = true
+    bool LoopEnabled = true,
+    IReadOnlyList<ControllerKnobFeedback>? Knobs = null,
+    string? DeviceName = null,
+    bool DeviceLocked = false
 );

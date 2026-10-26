@@ -1,5 +1,17 @@
 (string Name, Action Run)[] tests =
 [
+    (
+        "Controller snapshots detach all eight knob labels and values",
+        FeedbackPresentationTests.Snapshots
+    ),
+    (
+        "Knob, device and lock feedback dedupe preserves independent surface components",
+        FeedbackPresentationTests.Dedupe
+    ),
+    (
+        "All knob banks, device navigation, and parameter-page guards preserve native roles",
+        ControlMappingTests.SoundModes
+    ),
     ("Channel messages preserve channel, port, and value semantics", ProtocolTests.ChannelMessages),
     (
         "Malformed and random input stays bounded and cannot escape the parser",

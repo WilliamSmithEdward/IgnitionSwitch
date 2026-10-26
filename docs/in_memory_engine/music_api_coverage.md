@@ -1,29 +1,35 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, bounded retrospective Capture MIDI milestone. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, sound parameters, stereo effects and complete initial pot banks. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
 The in-memory API is `IgnitionSwitch.Core`. Its implementation has no external package dependencies. Windows MIDI, physical controllers, WinUI, and the NAudio output driver are adapters around it, with separate evidence below.
 
-Counts are taken from the generated Release XML documentation at `src/IgnitionSwitch.Core/bin/x64/Release/net10.0/IgnitionSwitch.Core.xml`. Count distinct documented `T:`, `F:`, `M:`, and `P:` entries. Include declared positional-record constructors/properties and enum values. Exclude internal helpers, implicit default constructors, and generated record equality, hashing, deconstruction, and printing conveniences. These counts inventory the declared API; they are not a test-coverage percentage.
+Counts are taken from the generated Release XML documentation, verified for this milestone at `artifacts/playability/bin/IgnitionSwitch.Core/release/IgnitionSwitch.Core.xml`. Count distinct documented `T:`, `F:`, `M:`, and `P:` entries. Include declared positional-record constructors/properties and enum values. Exclude internal helpers, implicit default constructors, and generated record equality, hashing, deconstruction, and printing conveniences. These counts inventory the declared API; they are not a test-coverage percentage.
 
 | Public type | Constants/enum values | Constructors/method overloads | Properties | XML entries including type |
 | --- | ---: | ---: | ---: | ---: |
 | `Domain.CaptureResult` | 0 | 1 | 2 | 4 |
 | `Domain.CaptureStatus` | 5 | 0 | 0 | 6 |
+| `Domain.DelaySettings` | 0 | 1 | 4 | 6 |
 | `Domain.InstrumentKind` | 4 | 0 | 0 | 5 |
 | `Domain.LoopNote` | 0 | 1 | 4 | 6 |
-| `Domain.SessionSnapshot` | 0 | 1 | 5 | 7 |
-| `Domain.TrackSnapshot` | 0 | 1 | 5 | 7 |
+| `Domain.ParameterAddress` | 0 | 1 | 2 | 4 |
+| `Domain.ParameterDescriptor` | 0 | 3 | 6 | 10 |
+| `Domain.ParameterId` | 19 | 0 | 0 | 20 |
+| `Domain.ReverbSettings` | 0 | 1 | 4 | 6 |
+| `Domain.SessionSnapshot` | 0 | 1 | 7 | 9 |
+| `Domain.TrackSnapshot` | 0 | 1 | 6 | 8 |
+| `Domain.TrackSoundSettings` | 0 | 1 | 7 | 9 |
 | `Domain.TrackState` | 0 | 1 | 6 | 8 |
 | `Persistence.SessionStore` | 1 | 2 | 0 | 4 |
-| `Sequencing.WorkstationEngine` | 3 | 27 | 16 | 47 |
-| **Total: 9 types** | **13** | **34** | **38** | **94** |
+| `Sequencing.WorkstationEngine` | 3 | 30 | 16 | 50 |
+| **Total: 15 types** | **32** | **44** | **64** | **155** |
 
-`WorkstationEngine` therefore declares **46 non-type members**: 27 method overloads, 16 properties, and 3 constants. The full documented Core API has 85 non-type entries plus 9 type entries. `NoteRevision` tracks recorded note-content changes independently of mixer and transport state. The history API adds `CanUndo`, `CanRedo`, `Undo()`, `Redo()` and `CommitEdit()`. Quantization adds `RecordingQuantizationEnabled` and `QuantizeSelectedTrack()`. `LoopEnabled` selects repeating or single-pass transport without changing project content. `EndRecording()` atomically finalizes active recording without starting or restarting transport. Capture adds `HasRecentPerformance`, `CaptureRecentPerformance()`, an explicit note-on history-retention overload, and typed result/status types.
+`WorkstationEngine` therefore declares **49 non-type members**: 30 method overloads, 16 properties, and 3 constants. The full documented Core API has 140 non-type entries plus 15 type entries. `NoteRevision` tracks recorded note-content changes independently of mixer and transport state. The history API adds `CanUndo`, `CanRedo`, `Undo()`, `Redo()` and `CommitEdit()`. Quantization adds `RecordingQuantizationEnabled` and `QuantizeSelectedTrack()`. `LoopEnabled` selects repeating or single-pass transport without changing project content. `EndRecording()` atomically finalizes active recording without starting or restarting transport. Capture adds `HasRecentPerformance`, `CaptureRecentPerformance()`, an explicit note-on history-retention overload, and typed result/status types. `GetParameter`, `SetParameter` and `GetDescriptor` use a hardware-independent `ParameterAddress`; normalized targets, physical units and exact defaults share one history path.
 
-Undo history is transient and does not change the version 1 JSON schema. Pad presentation and hardware feedback remain adapters around the same engine; animation and MIDI output do not drive sound generation.
+Project schema 2 stores sound/mixer targets and effect settings; strict version 1 JSON imports with native dry defaults. Undo history, smoothing and DSP buffers remain transient. Pad presentation and hardware feedback remain adapters around the same engine; animation and MIDI output do not drive sound generation.
 
 ## Implemented behavior and evidence
 
@@ -31,7 +37,7 @@ Undo history is transient and does not change the version 1 JSON schema. Pad pre
 
 | Area | Status and supported behavior | Evidence | Remaining gaps |
 | --- | --- | --- | --- |
-| Built-in instruments | Implemented; keys, bass, atmosphere, synthesized drums, velocity, 64-voice limit | `AudioTests.Instruments`: each track produces nonzero finite samples; dense input stays bounded; channels align | Musical/physical listening review; richer presets and effects |
+| Built-in instruments | Implemented; keys, bass, atmosphere, synthesized drums, velocity, 64-voice limit, Tone/Attack/Release/Drive and drum Tail. Scheduled notes prefer replacing loop voices and preserve fresh live attacks | `AudioTests.Instruments`; `SoundTests.Instruments`; `VoicePriorityTests.LiveAttacks` proves live output under dense scheduled pressure, deterministic replacement and the 64-voice bound | Sparse hardware-miss diagnosis, musical listening and richer presets; more than 64 fresh live attacks still replaces the oldest live voice |
 | Note ownership and release | Implemented; selected/explicit-track note methods, sustain, retrigger, velocity-zero release, 4 ms minimum smooth onset for short taps arriving between render callbacks, immediate all-notes-off | `AudioTests.Release` checks all three melodic instruments, pre-render/early releases, ordinary tails, retriggers, and panic; `StudioSessionTests.Ownership`, `.Sustain` | Physical pedal polarity, rapid scale/chord collisions, simultaneous input sources |
 | Pitch bend | Implemented; normalized −1…1 maps to ±2 semitones for melodic voices | `ValidationTests.Controls` rejects invalid bend; formula in `SynthVoice`/`WorkstationEngine` | A frequency-response assertion and physical wheel pass; recorded bend automation |
 | Transport and metronome | Implemented; sample-clock playback, repeat/single-pass mode, pause/resume, stop/rewind, four bars, tempo 60–180 BPM, retained terminal beat and click | `LoopTests.Transport`, `.RecordingAndPartitions` cover completion/restart/live ownership/recording/partition behavior; `SequencingTests.Transport` covers frame-based advancement, loop wrap, reset and click; `SequencingTests.Pause`: frozen clock, precise resume, pending boundary onset, stop rewind | Variable meter/length, external clock, measured timing |
@@ -41,13 +47,16 @@ Undo history is transient and does not change the version 1 JSON schema. Pad pre
 | Retrospective Capture MIDI | Implemented; independent rendered-frame/performance-beat clock while stopped or paused, all-track live-source history, sustain and held gates, stable four-bar phrase alignment, atomic merge/capacity/truncation outcomes, one undo step and repeated-capture no-op handling | `CaptureTests.MergeAndHistory`, `.BoundsAndLifecycle`, `.ClocksAndPartitions`; `CaptureAlignmentTests.FreePhraseAndBoundary`, `.ProjectPhaseAndEpoch`; `CaptureCommandTests.Commands`, `.AudioAvailabilityAndLifecycle` | Physical Capture button and audible phrase review; pitch/modulation automation is not retained |
 | Undo and Redo | Implemented; bounded delta history, recording-part groups split by mixer/clear edits, continuous scalar gesture coalescing, load resets, retained beat/live ownership, incremental note schedule restoration | `HistoryTests.Notes`, `.MixerAndLifecycle`, `.Bounds`; `PerformanceFeedbackTests.HistoryCommands` checks UI/hardware and modal/revision behavior | Interactive/physical Undo and Shift+Undo pass; user-facing history descriptions |
 | Incremental schedule and input capacity | Implemented; preallocated sorted value-type events, binary-search replacement of one changed note pair, stable unrelated IDs, one full rebuild on project apply or a bulk Quantise edit, single-pass track clearing | `InputStressTests.OrderedInputs`: four-track chord/drum bursts match freshly loaded playback, 1,536 ordered retriggers/pedal release, full 2,048-note track still plays live hits, identical overdubs/mixer changes preserve `NoteRevision` | Note-on voice/record objects still allocate; broader sustained-load and physical-input measurements |
-| Render slices and audio buffer policy | Implemented; 64-frame engine critical sections, driver-default-period shared/event output request, 30 ms compatibility fallback, reported playback failure triggers recovery | `AudioTests.RenderPartitions`: callback partition equivalence, metronome/loop continuity, offset guards and next-callback live input; `AudioBufferTests.SharedPeriod`: timing-unit conversion, positive timeouts, bounded fallback | Physical key-to-sound measurement; sub-default shared periods through a future `IAudioClient3` output path; driver glitch/compatibility testing |
+| Render slices and audio buffer policy | Implemented; 64-frame engine critical sections, default shared/event output, 30 ms compatibility fallback, explicit minimum-period exclusive option, direct native float/PCM16 validation, render-thread MMCSS lifecycle and reported-failure recovery | `AudioTests.RenderPartitions`; `AudioBufferTests.SharedPeriod`; `ExclusiveAudioBufferTests.MinimumPeriod`; running playback build opened shared output with requested 10 ms. Read-only DAC query found shared min/default/max 480 frames and exclusive minimum 3 ms, with native 48 kHz stereo PCM16 support | Exclusive stream and fallback/recovery interactive checks; physical key-to-sound measurement and driver glitch/compatibility testing. Requested periods are not measured latency |
 | Loop-boundary duration | Implemented; note durations can extend across loop wrap | `SequencingTests.WrappingNote` checks sound across the boundary and scheduled release | Broader stress/timing measurements |
-| Mixer and clear | Implemented; per-track mute/gain, master gain, selected-track clearing | `SequencingTests.Tracks`; finite-output assertions in `AudioTests.Instruments` | Pan, sends, effect processing, solo, automation |
+| Mixer and clear | Implemented; per-track mute/gain/pan, master gain, selected-track clearing, unity-center stereo routing and 5 ms gain/pan/send/return ramps | `SequencingTests.Tracks`; `SoundTests.Mixer` checks stereo endpoints, metadata/validation, canonical no-ops and shared parameter history | Solo, automation and physical stereo listening |
+| Echo and Room | Implemented; post-fader/mute/pan parallel sends, damped stereo feedback delay and diffuse stereo reverb, bounded preallocated storage, crossfaded time/predelay changes, independent live/sequenced lanes | `SoundTests.EffectsAndLanes` checks real wet timing/decay, routing/mute/pan, partition equivalence and lane resets. Isolated source-linked DSP harness checks sample rates/extremes, diffusion/damping, retargets, reset and warm zero allocation | Listening and preset tuning. Shared already-fed tails may spill after a track is muted; no cross-effect feedback or recorded automation |
+| Parameter controls | Implemented; nineteen IDs, validated track/global addresses, normalized targets, physical conversion/defaults, target-based undo, all eight Instrument/Echo/Room slots, actual Device Lock, semantic mixer banks and absolute-pot pickup | `SoundTests.Mixer`; `SoundControlTests.PagesAndLifecycle`, `.HardwareBanks`, `.Pickup`; `ControlMappingTests.SoundModes`; `FeedbackPresentationTests.Snapshots`, `.Dedupe` | Physical pot/Device Select/Lock/LCD verification and broader parameter pages |
 | Mixer presentation | Implemented in App adapter; shared 100 ms cubic visual easing for all five volume controls, immediate native target values, coalesced hardware feedback on the UI tick, direct manipulation and reduced-motion behavior | `SliderMotion` and `MainWindow`; running-app checks covered native target updates, master zero/full endpoints, track gain changes, pointer takeover and pane resizing with aligned thumb/fill | Physical fast-pot-turn, keyboard takeover and reduced-motion verification on additional display configurations; screenshots do not measure animation cadence |
-| Pad hit feedback | Implemented in adapters; note-addressed physical layout, velocity-sensitive app flash, minimum 80 ms hit visibility, held/retrigger/release handling, 120 ms app fade, coalesced worker-only hardware output and mode-aware base colors | `PadFeedbackTests.Layout`, `.Hits`, `.Context`; `PerformanceFeedbackTests.Activity` checks between-frame taps, 3,000 concurrent mailbox hits, matching UI/hardware requests and Stop reset; running build `8d64d95` displayed the Kick flash and return, aligned shortcut columns and all sixteen pads within a 1,348 × 834 logical window | Physical white-hit/restore and matching app-pad confirmation; reduced-motion and sustained-load visual pass |
-| Session snapshots | Implemented; detached read-only collections, validated apply, version 1 schema | `PersistenceTests.Roundtrip` checks caller mutation and later edits cannot alter stored snapshots; `ValidationTests.Projects` | Schema migrations and variable track/loop capacity |
-| JSON persistence | Implemented; 4 MiB file cap, four tracks/four bars, finite/ranged values, bounded names/events, atomic replacement | `ValidationTests.Projects`; `PersistenceTests.Roundtrip` checks roundtrip, cancellation, old-file preservation, temporary-file cleanup | Audio/MIDI export, additional schema versions |
+| Pad hit feedback | Implemented in adapters; note-addressed physical layout, velocity-sensitive app flash, minimum 80 ms hit visibility, held/retrigger/release handling, 120 ms app fade, coalesced worker-only hardware output and mode-aware base colors | `PadFeedbackTests.Layout`, `.Hits`, `.Context`; `PerformanceFeedbackTests.Activity`; William confirms physical/app reactions in the parameter preview, while reporting intermittent registration and perceived delay | Diagnose the reported sparse misses and perceived delay; sustained-load/reduced-motion pass. Flashes intentionally coalesce and cannot count every rapid hit |
+| Received-input diagnostics | Implemented in App; bounded received drum count and last/min/max velocity, collapsed Devices UI, noncontent reset, no per-hit allocation | `InputDiagnosticsTests.CountingAndReset`: 1,024 retriggers, releases/exclusions, modal/offline input, held-owner/history/revision preservation and allocation checks; running playback build displayed aligned zero-state counters | Physical counted-hit and velocity evidence. Counter does not measure rendered sound or latency |
+| Session snapshots | Implemented; detached read-only collections, validated apply, version 2 sound/effect targets, strict version 1 migration | `PersistenceTests.Roundtrip`; `SchemaTests.Migration`, `.RoundtripAndValidation` checks native defaults, every parameter, malformed/missing/unknown fields and versions, atomic failed apply | Variable track/loop capacity and expression automation |
+| JSON persistence | Implemented; 4 MiB file cap, four tracks/four bars, finite/ranged values, bounded names/events, strict version-specific documents, atomic replacement | `ValidationTests.Projects`; `PersistenceTests.Roundtrip` checks cancellation/old-file preservation/cleanup; `SchemaTests` checks legacy import and version 2 saves | Audio/MIDI export and future schema migrations |
 | Input and lifecycle validation | Implemented; invalid track/note/gain/buffer controls rejected, disposal prevents further engine work | `ValidationTests.Controls` | Extended concurrency and long-session stress |
 | Revision-aware saves and dialogs | Implemented in App adapter; captured revisions preserve newer unsaved edits, idempotent recording finalization cannot restart a naturally completed pass, note completion advances content revision, modal operations finalize/block project mutations while preserving live performance, project replacement resets owners atomically | `StudioSessionTests.Revisions`, `.ModalIsolation`; `InputReliabilityTests.ProjectReplacement` | Full interactive picker/confirmation pass |
 | Controller feedback and shutdown | Implemented in App adapter; mute/name/connection/loop-aware feedback, callback guards and adapter disposal | `StudioSessionTests.Feedback`, `.Shutdown` | Physical unplug/contending-app tests and visible LED/LCD verification |
@@ -55,19 +64,19 @@ Undo history is transient and does not change the version 1 JSON schema. Pad pre
 
 ## Test inventory and physical evidence
 
-The executable runners currently define **24 Core groups**, **11 MIDI groups**, and **17 App groups**: **52 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
+The executable runners currently define **30 Core groups**, **14 MIDI groups**, and **22 App groups**: **66 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
 
 ```powershell
 .\scripts\verify.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-The combined verification script passed all 52 groups for this milestone, with zero build warnings/errors, clean prettyCSharp formatting and no outstanding style/analyzer diagnostics at informational severity. Automated checks do not establish physical audio quality or complete hardware coverage.
+The combined verification script passed all 66 groups for this milestone, with zero build warnings/errors, clean prettyCSharp formatting and no outstanding style/analyzer diagnostics at informational severity. Automated checks do not establish physical audio quality or complete hardware coverage.
 
 The running Quantise build was resized separately in width and height to approximately 1,000 × 700 logical pixels. All four tracks, four bars, sixteen pads and the complete status line remained visible without scrollbars; the pad flash matched its resized face. The Loop menu aligned its labels, disabled Quantise on an empty non-recording track, and toggled the transient recording grid without marking content unsaved. Sound checks were unavailable during this pass because Windows reported no default playback output.
 
 The running Loop build's Repeat menu was toggled off and back on. Its checkmark and the `4 bars · once` header agreed, without a phantom unsaved-content change. Natural completion, finalized save contents and retained live-note release were checked through the engine/App regression suites; audible endpoint behavior and the physical button/LCD still need confirmation after restoring audio output.
 
-The Capture build passed combined validation, including production coordinator checks for all-track capture, notices, Undo, saving, project replacement and audio-unavailable input exclusion. Its new live menu check is pending: desktop capture returned black pixels and activation failed again after a fresh-window retry. The previously running Loop preview was left untouched. This is an environment/interactive verification limitation, not additional runtime evidence for Capture.
+The parameter build was launched after Windows was unlocked and the empty Loop preview closed. It identified the Launchkey and recovered audio availability (transport became enabled). Width and height were resized separately to 1,000 × 700; all four tracks, four bars and sixteen pads fit without horizontal scrolling. The Sound flyout fit within the window with aligned label/value columns, correct Instrument/Echo controls, and working parameter edit/Undo. Physical feedback and all-bank playing verification remain separate human checks. Capture's menu action is implemented and covered by production coordinator checks; its live action still needs review.
 
 The local formatter runtime is Python 3.12. GitHub CI pins Python **3.13.17**, whose Windows x64 artifact is listed in the Actions runtime manifest. This tooling pin does not change the API inventory or supported music behavior.
 
@@ -117,6 +126,18 @@ Capture uses a lazy bounded workspace and value candidates. In a warmed Release/
 
 Retained and explicitly unretained live note-on/off pairs both allocated **136 bytes**, so the value-type history ring added no input allocation in that comparison. A fixed-voice run of 256 callbacks of 480 stereo frames allocated **zero bytes** and produced finite samples. These are isolated Core compute/allocation observations, with warm scratch storage, no audio stream and no MIDI port. Cold initialization, host scheduling, bulk-operation tails, physical input delivery and audible latency remain separate concerns.
 
+The sound-parameter milestone compared default audio against the frozen Loop-build Core DLL in an isolated assembly load context. Maximum sample differences across held and released audio were **0** for one voice, **8.94 × 10⁻⁸** for sixteen voices and **2.68 × 10⁻⁷** for sixty-four voices, consistent with changed summation order and below a 10⁻⁶ tolerance. This compares actual earlier synthesis rather than two configurations of the new implementation.
+
+A warmed Release/x64 run measured 256 callbacks of 480 stereo frames per case. All output was finite and each case allocated zero bytes during measured rendering:
+
+| Voices | Dry mean CPU per 10 ms audio | Delay, room and full drive mean CPU |
+| --- | ---: | ---: |
+| 1 | 0.0356 ms | 0.2011 ms |
+| 16 | 0.2452 ms | 0.3827 ms |
+| 64 | 0.9752 ms | 1.1151 ms |
+
+Development provenance is in the ignored `artifacts/sound-foundation-benchmark/Program.cs` and `SoundBenchmark.csproj`; its comparison loaded `artifacts/loop-mode/bin/IgnitionSwitch.Core/release/IgnitionSwitch.Core.dll`. The isolated source-linked effects harness is `artifacts/fx-dsp-benchmark/Program.cs`. No output stream or hardware port was opened for these measurements. They describe host compute cost and allocation, rather than physical latency or a scheduling guarantee.
+
 ## Initial limits and unimplemented areas
 
 | Limit | Current value |
@@ -129,8 +150,8 @@ Retained and explicitly unretained live note-on/off pairs both allocated **136 b
 | Simultaneous voices | 64, with oldest-voice replacement |
 | Recorded notes | 2,048 per track |
 | Stored note range | MIDI 0–127, velocity 1–127, onset 0 ≤ beat < 16, positive duration ≤16 beats |
-| Project file | Version 1 JSON, at most 4 MiB |
+| Project file | Writes version 2 JSON; strict version 1 import; at most 4 MiB |
 | Undo history | At most 64 edit steps and 32,768 retained note deltas; not persisted |
 | Retrospective history | At most 8,192 completed performance notes and 512 held gates; current phrase, four-bar window; not persisted |
 
-No VST hosting, audio import/export, song arranger, synthesized aftertouch/modulation response, MIDI learn, external instrument routing, or project-to-hardware MIDI clock is implemented. Native Launchkey scale/chord/arp features can send ordinary performed notes, but the application does not mirror or synchronize their settings. Saved projects retain finalized notes and mixer state; metronome/selection, recording-grid/repeat preferences, retrospective buffers, edit history and continuous pitch/sustain automation are not persisted. Remaining controller work is tracked in [the production-polish goal](../production_polish.md).
+No VST hosting, audio import/export, song arranger, synthesized aftertouch/modulation response, MIDI learn, external instrument routing, or project-to-hardware MIDI clock is implemented. Native Launchkey scale/chord/arp features can send ordinary performed notes, but the application does not mirror or synchronize their settings. Saved projects retain finalized notes, mixer/sound targets and effect settings; device/track selection and lock, metronome, recording-grid/repeat preferences, retrospective buffers, edit history, DSP buffers and continuous pitch/sustain automation are not persisted. Remaining controller work is tracked in [the production-polish goal](../production_polish.md).

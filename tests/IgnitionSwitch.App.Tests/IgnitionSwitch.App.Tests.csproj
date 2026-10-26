@@ -10,6 +10,12 @@
     <!-- Compile the actual session coordinator with fake boundary adapters; do not copy production logic. -->
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.cs" Link="Services/StudioSession.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.Capture.cs" Link="Services/StudioSession.Capture.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.Parameters.cs" Link="Services/StudioSession.Parameters.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/SoundControlPage.cs" Link="Services/SoundControlPage.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/AbsoluteKnobPickup.cs" Link="Services/AbsoluteKnobPickup.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/PerformanceInputDiagnostics.cs" Link="Services/PerformanceInputDiagnostics.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Audio/AudioOutputMode.cs" Link="Audio/AudioOutputMode.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Audio/ExclusiveAudioBufferPolicy.cs" Link="Audio/ExclusiveAudioBufferPolicy.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/PerformanceActivity.cs" Link="Services/PerformanceActivity.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Presentation/PadActivityMailbox.cs" Link="Presentation/PadActivityMailbox.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/ControllerFactory.cs" Link="Services/ControllerFactory.cs" />

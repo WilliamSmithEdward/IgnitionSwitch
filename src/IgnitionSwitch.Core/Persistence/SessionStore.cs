@@ -15,6 +15,7 @@ public static class SessionStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        RespectRequiredConstructorParameters = true,
         MaxDepth = 16
     };
 
@@ -100,9 +101,27 @@ public static class SessionStore
 
         try
         {
-            session = await JsonSerializer
-                .DeserializeAsync<SessionSnapshot>(file, SerializerOptions, cancellationToken)
+            using JsonDocument document = await JsonDocument
+                .ParseAsync(file, new JsonDocumentOptions { MaxDepth = 16 }, cancellationToken)
                 .ConfigureAwait(false);
+            JsonElement root = document.RootElement;
+
+            if (
+                root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("version", out JsonElement version)
+                || version.ValueKind != JsonValueKind.Number
+                || !version.TryGetInt32(out int schema)
+            )
+            {
+                throw new InvalidDataException("This project has no valid schema version.");
+            }
+
+            session = schema switch
+            {
+                1 => ImportLegacy(root.Deserialize<LegacySessionDocument>(SerializerOptions)),
+                2 => root.Deserialize<SessionSnapshot>(SerializerOptions),
+                _ => throw new InvalidDataException("Unsupported project version.")
+            };
         }
 
         catch (JsonException exception)
@@ -120,7 +139,7 @@ public static class SessionStore
     {
         if (
             session is null
-            || session.Version != 1
+            || session.Version is not (1 or 2)
             || session.LoopBars != 4
             || !InRange(session.Tempo, 60, 180)
             || !InRange(session.MasterVolume, 0, 1)
@@ -132,6 +151,32 @@ public static class SessionStore
                 "Unsupported project version, loop size, tempo, volume, or track count."
             );
         }
+
+        if (
+            session.Version == 1
+            && (session.Delay is not null
+                || session.Reverb is not null
+                || session.Tracks.Any(track => track?.Sound is not null))
+        )
+        {
+            throw new InvalidDataException(
+                "Version one projects cannot contain version two sound settings."
+            );
+        }
+
+        if (session.Version == 2 && (session.Delay is null || session.Reverb is null))
+        {
+            throw new InvalidDataException("Version two projects require effect settings.");
+        }
+
+        DelaySettings delay = session.Delay ?? ParameterCatalog.DelayDefaults;
+        ReverbSettings reverb = session.Reverb ?? ParameterCatalog.ReverbDefaults;
+        ValidateNormalized(
+            [
+                delay.Time, delay.Feedback, delay.Damping, delay.Return, reverb.Decay,
+                reverb.Damping, reverb.PreDelay, reverb.Return
+            ]
+        );
 
         TrackSnapshot[] tracks = [.. session.Tracks];
 
@@ -148,6 +193,7 @@ public static class SessionStore
                 || !InRange(track.Volume, 0, 1)
                 || track.Notes is null
                 || track.Notes.Count > WorkstationEngine.MaximumNotesPerTrack
+                || (session.Version == 2 && track.Sound is null)
             )
             {
                 throw new InvalidDataException(
@@ -175,10 +221,70 @@ public static class SessionStore
                 }
             }
 
-            tracks[index] = track with { Notes = Array.AsReadOnly(notes) };
+            TrackSoundSettings sound = track.Sound
+                ?? ParameterCatalog.TrackDefaults(track.Instrument);
+            ValidateNormalized(
+                [
+                    sound.Tone, sound.Attack, sound.Release, sound.Drive, sound.Pan, sound.SendA,
+                    sound.SendB
+                ]
+            );
+            tracks[index] = track with
+            {
+                Notes = Array.AsReadOnly(notes),
+                Sound = sound
+            };
         }
 
-        return session with { Tracks = Array.AsReadOnly(tracks) };
+        return session with
+        {
+            Version = 2,
+            Tracks = Array.AsReadOnly(tracks),
+            Delay = delay,
+            Reverb = reverb
+        };
+    }
+
+    private static SessionSnapshot? ImportLegacy(LegacySessionDocument? document)
+    {
+        if (document is null)
+        {
+            return null;
+        }
+
+        TrackSnapshot[]? tracks = document.Tracks
+            ?.Select(
+                track => track is null
+                    ? null!
+                    : new TrackSnapshot(
+                        track.Name,
+                        track.Instrument,
+                        track.IsMuted,
+                        track.Volume,
+                        track.Notes!
+                    )
+            )
+            .ToArray();
+        return new(
+            document.Version,
+            document.Tempo,
+            document.LoopBars,
+            document.MasterVolume,
+            tracks!
+        );
+    }
+
+    private static void ValidateNormalized(ReadOnlySpan<float> values)
+    {
+        foreach (float value in values)
+        {
+            if (!float.IsFinite(value) || value is < 0 or > 1)
+            {
+                throw new InvalidDataException(
+                    "A sound parameter is outside its normalized range."
+                );
+            }
+        }
     }
 
     private static bool InRange(double value, double minimum, double maximum)

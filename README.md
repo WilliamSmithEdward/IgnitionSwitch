@@ -8,7 +8,8 @@ This is an early working foundation. The Launchkey 37 MK3 comes first; hardware 
 
 - Four tracks: velvet keys, round bass, soft atmosphere, and synthesized drums.
 - Velocity-sensitive playing, sustain, pitch bend, a metronome, and quantized loop recording.
-- Track gain, mute, master volume, and tempo controls.
+- Track gain, mute, stereo pan, master volume, and tempo controls.
+- Eight instrument controls, real echo and room sends, and a compact Sound inspector.
 - A focused loop view, sixteen on-screen drum pads, and resize handles for both workspace splits.
 - Play/pause that preserves position, with a separate stop/rewind action.
 - Matching hardware/application drum-pad hit feedback and bounded Undo/Redo for recording and mixer edits.
@@ -51,7 +52,13 @@ Use **Ctrl+Z** / **Ctrl+Shift+Z**, or hardware **Undo** / **Shift+Undo**, to rev
 
 Drag the handle beside Tracks to change its width, or the handle between Loop and Drums to change their heights. Tab to a handle and use its arrow keys for keyboard resizing. The layout follows the window size without horizontal scrolling.
 
-The app uses the Windows default audio output. In the supported hardware Device/Volume pot modes, pots 1–4 adjust track gains, pot 5 adjusts master gain, and pot 6 adjusts tempo. The Launchkey sends MIDI and has no sound engine of its own.
+Open **Sound** to adjust the selected instrument, Echo or Room. Instrument controls are Tone, Attack, Release (Tail for drums), Drive, Pan, Delay send, Reverb send and Level. Echo and Room each have four effect controls followed by the four track sends. These settings are saved with the project; older version 1 projects open with their original dry sound.
+
+The Launchkey's **Device** pots follow the same Sound target. Hold **Device Select** and use ▲/▼ to choose Instrument, Echo or Room; the first top-row page pad is lit because each currently has one page. **Device Lock** retains the actual instrument across track changes. **Volume** maps pots 1–4 to track levels, 5 to master, 6 to tempo, and 7–8 to effect returns. **Pan**, **Send A** and **Send B** map the first four pots to the corresponding track controls. Absolute pots use pickup: turn through the existing value before taking over; the LCD indicates the required direction. Custom modes remain hardware-owned.
+
+The app uses the Windows default audio output. The Launchkey sends MIDI and has no sound engine of its own.
+
+**Devices → Playback mode** offers shared output or an explicit low-latency exclusive option. Exclusive output requests the driver's minimum period and can prevent other apps from playing sound; unsupported/busy devices fall back to shared output. Buffer requests describe configuration, rather than measured key-to-sound latency. **Devices → Input diagnostics** shows received drum hits and velocity statistics for troubleshooting without changing the music.
 
 The connected Launchkey's model inquiry and firmware **0.2.1.7** were observed during development. Physical playing, pedal behavior, visible hardware feedback, and audio latency still need a hands-on verification pass. See the [living Launchkey reference](docs/devices/novation_launchkey_mk3_37.md) for exact mappings, evidence, and remaining gaps.
 

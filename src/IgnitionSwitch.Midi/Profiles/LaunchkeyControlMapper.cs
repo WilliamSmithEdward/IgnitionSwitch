@@ -47,6 +47,18 @@ public sealed class LaunchkeyControlMapper
             input.Kind == MidiInputKind.NoteOn
             && input.Channel == 0
             && input.Value > 0
+            && PadMode == 9
+            && input.Number is >= 64 and <= 71
+        )
+        {
+            control = new(MusicControlKind.SelectParameterPage, input.Number - 64);
+            return true;
+        }
+
+        if (
+            input.Kind == MidiInputKind.NoteOn
+            && input.Channel == 0
+            && input.Value > 0
             && PadMode == 2
         )
         {
@@ -76,31 +88,24 @@ public sealed class LaunchkeyControlMapper
         if (input.Number == LaunchkeyMk3Protocol.PotModeController)
         {
             PotMode = input.Value;
-            return false;
+            control = new(MusicControlKind.SelectControlBank, (int)GetControlBank(PotMode));
+            return true;
         }
 
         if (input.Number is >= 21 and <= 28)
         {
-            if (PotMode is not (1 or 2))
+            if (PotMode is not (>= 1 and <= 5))
             {
                 return false;
             }
 
-            control = input.Number switch
-            {
-                >= 21 and <= 24 => new(
-                    MusicControlKind.SetTrackVolume,
-                    input.Number - 21,
-                    input.Value / 127.0
-                ),
-                25 => new(MusicControlKind.SetMasterVolume, value: input.Value / 127.0),
-                26 => new(
-                    MusicControlKind.SetTempo,
-                    value: 60 + Math.Round(input.Value * 120 / 127.0)
-                ),
-                _ => null
-            };
-            return control is not null;
+            control = new(
+                MusicControlKind.SetKnob,
+                input.Number - 21,
+                input.Value / 127.0,
+                GetControlBank(PotMode)
+            );
+            return true;
         }
 
         if (input.Value == 0)
@@ -110,6 +115,9 @@ public sealed class LaunchkeyControlMapper
 
         control = input.Number switch
         {
+            106 when PadMode == 9 => new(MusicControlKind.MoveSoundDevice, -1),
+            107 when PadMode == 9 => new(MusicControlKind.MoveSoundDevice, 1),
+            52 => new(MusicControlKind.ToggleSoundDeviceLock),
             LaunchkeyMk3Protocol.Play => new(MusicControlKind.TogglePlayback),
             LaunchkeyMk3Protocol.Stop => new(MusicControlKind.Stop),
             LaunchkeyMk3Protocol.Record => new(MusicControlKind.ToggleRecording),
@@ -125,5 +133,18 @@ public sealed class LaunchkeyControlMapper
             _ => null
         };
         return control is not null;
+    }
+
+    private static ControllerControlBank GetControlBank(int mode)
+    {
+        return mode switch
+        {
+            1 => ControllerControlBank.Volume,
+            2 => ControllerControlBank.Device,
+            3 => ControllerControlBank.Pan,
+            4 => ControllerControlBank.SendA,
+            5 => ControllerControlBank.SendB,
+            _ => ControllerControlBank.Custom
+        };
     }
 }

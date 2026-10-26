@@ -177,6 +177,32 @@ public static class LaunchkeyMk3Protocol
         ];
     }
 
+    /// <summary>Colors a Device Select pad: top row 0–7 maps to notes 64–71, bottom 8–15 to 80–87.</summary>
+    public static byte[] SetDeviceSelectPad(int pad, int color)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(pad);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pad, 15);
+        ArgumentOutOfRangeException.ThrowIfNegative(color);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(color, 127);
+        return
+        [
+            0x90,
+            (byte)(pad < 8 ? 64 + pad : 80 + pad - 8),
+            (byte)color
+        ];
+    }
+
+    /// <summary>Sets the white Device Lock LED through the documented channel-16 grayscale CC.</summary>
+    public static byte[] SetDeviceLock(bool locked)
+    {
+        return
+        [
+            0xBF,
+            52,
+            locked ? (byte)127 : (byte)0
+        ];
+    }
+
     private static byte[] KnobMessage(byte command, int knob, string text)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(knob);

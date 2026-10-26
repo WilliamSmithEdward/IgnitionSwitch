@@ -9,7 +9,9 @@ internal sealed class SynthVoice(
     int note,
     int velocity,
     InstrumentKind instrument,
-    bool isLoop
+    bool isLoop,
+    double attackSeconds,
+    double releasePhysical
 )
 {
     private const int MinimumOnsetFrames = WorkstationEngine.SampleRate / 250;
@@ -23,18 +25,25 @@ internal sealed class SynthVoice(
     private bool _releasePending;
     private uint _noise = 123456789;
     private double _phase;
+    private readonly double _attackSeconds = attackSeconds;
+    private double _releaseLength = instrument == InstrumentKind.Drums ? 0.12 : releasePhysical;
+    private double _drumTail = instrument == InstrumentKind.Drums ? releasePhysical : 1;
+    private float _toneLow;
 
     public int Id { get; } = id;
     public int Track { get; } = track;
     public bool IsLoop { get; } = isLoop;
     public bool IsFinished { get; private set; }
+    public bool IsProtectedLiveAttack => !IsLoop && _age < MinimumOnsetFrames;
 
-    public void Release()
+    public void Release(double? releaseSeconds = null)
     {
         if (_releaseAge >= 0 || _instrument == InstrumentKind.Drums)
         {
             return;
         }
+
+        _releaseLength = releaseSeconds ?? _releaseLength;
 
         if (_age < MinimumOnsetFrames)
         {
@@ -47,7 +56,7 @@ internal sealed class SynthVoice(
         _releasePending = false;
     }
 
-    public float Render(double pitchRatio)
+    public float Render(double pitchRatio, float tone, float drive, double drumTail)
     {
         if (_releasePending && _age >= MinimumOnsetFrames)
         {
@@ -60,6 +69,7 @@ internal sealed class SynthVoice(
 
         if (_instrument == InstrumentKind.Drums)
         {
+            _drumTail += (drumTail - _drumTail) * 0.005;
             _noise ^= _noise << 13;
             _noise ^= _noise >> 17;
             _noise ^= _noise << 5;
@@ -69,17 +79,17 @@ internal sealed class SynthVoice(
                 36 or 35 => Math.Sin(
                     2 * Math.PI * ((47 * seconds) + (2.2 * (1 - Math.Exp(-seconds * 35))))
                 )
-                    * Math.Exp(-seconds * 8),
+                    * Math.Exp(-seconds * 8 / _drumTail),
                 38 or 40 => ((noise * 0.7) + (Math.Sin(2 * Math.PI * 185 * seconds) * 0.3))
-                    * Math.Exp(-seconds * 17),
-                42 or 44 => noise * Math.Exp(-seconds * 55) * 0.6,
-                46 => noise * Math.Exp(-seconds * 12) * 0.5,
-                39 => noise * Math.Exp(-seconds * 22),
+                    * Math.Exp(-seconds * 17 / _drumTail),
+                42 or 44 => noise * Math.Exp(-seconds * 55 / _drumTail) * 0.6,
+                46 => noise * Math.Exp(-seconds * 12 / _drumTail) * 0.5,
+                39 => noise * Math.Exp(-seconds * 22 / _drumTail),
                 _ => ((Math.Sin(2 * Math.PI * _frequency * seconds) * 0.7) + (noise * 0.3))
-                    * Math.Exp(-seconds * 12)
+                    * Math.Exp(-seconds * 12 / _drumTail)
             };
 
-            if (seconds >= 1.5)
+            if (seconds >= 1.5 * _drumTail)
             {
                 IsFinished = true;
             }
@@ -106,6 +116,21 @@ internal sealed class SynthVoice(
             };
         }
 
+        _toneLow += ((float)wave - _toneLow) * 0.12f;
+
+        if (tone != 0.5f)
+        {
+            double balance = (tone - 0.5) * 2;
+            double high = wave - _toneLow;
+            wave = balance < 0 ? _toneLow + (high * (1 + balance)) : wave + (high * balance * 0.75);
+        }
+
+        if (drive > 0)
+        {
+            double driven = wave * (1 + (drive * 12));
+            wave += drive * ((driven / (1 + Math.Abs(driven))) - wave);
+        }
+
         _age++;
         return (float)wave * envelope * _gain;
     }
@@ -115,19 +140,17 @@ internal sealed class SynthVoice(
         if (_releaseAge >= 0)
         {
             double releaseSeconds = (double)(_age - _releaseAge) / WorkstationEngine.SampleRate;
-            double releaseLength = _instrument == InstrumentKind.Atmosphere ? 0.7 : 0.12;
 
-            if (releaseSeconds >= releaseLength)
+            if (releaseSeconds >= _releaseLength)
             {
                 IsFinished = true;
                 return 0;
             }
 
-            return _releaseLevel * (float)(1 - (releaseSeconds / releaseLength));
+            return _releaseLevel * (float)(1 - (releaseSeconds / _releaseLength));
         }
 
         double seconds = (double)_age / WorkstationEngine.SampleRate;
-        double attack = _instrument == InstrumentKind.Atmosphere ? 0.08 : 0.004;
         double sustain = _instrument switch
         {
             InstrumentKind.Keys => 0.3 + (0.7 * Math.Exp(-seconds * 1.7)),
@@ -135,6 +158,6 @@ internal sealed class SynthVoice(
             InstrumentKind.Atmosphere or InstrumentKind.Drums => 1,
             _ => 1
         };
-        return (float)(Math.Min(1, seconds / attack) * sustain);
+        return (float)(Math.Min(1, seconds / _attackSeconds) * sustain);
     }
 }

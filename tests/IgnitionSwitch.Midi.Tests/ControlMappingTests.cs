@@ -62,45 +62,62 @@ internal static class ControlMappingTests
             "Session mode did not restore."
         );
         Check.That(
-            mapper.TryMap(Cc(21, 0), out command)
-                && command is { Kind: MusicControlKind.SetTrackVolume, Index: 0, Value: 0 },
-            "Zero gain was discarded as a button release."
+            mapper.TryMap(Cc(21, 0), out command) && command?.Kind == MusicControlKind.SetKnob
+                && command.Index == 0
+                && command.Value == 0
+                && command.ControlBank == ControllerControlBank.Device,
+            "Zero parameter input was discarded as a button release."
         );
         Check.That(
             mapper.TryMap(Cc(24, 127), out command)
-                && command is { Kind: MusicControlKind.SetTrackVolume, Index: 3, Value: 1 },
-            "Maximum gain was not normalized."
+                && command is { Kind: MusicControlKind.SetKnob, Index: 3, Value: 1 },
+            "Maximum parameter value was not normalized."
         );
         Check.That(
             mapper.TryMap(Cc(25, 127), out command)
-                && command is { Kind: MusicControlKind.SetMasterVolume, Value: 1 },
-            "Master gain did not map."
+                && command is { Kind: MusicControlKind.SetKnob, Index: 4, Value: 1 },
+            "The fifth device parameter did not map."
         );
         Check.That(
             mapper.TryMap(Cc(26, 0), out command)
-                && command is { Kind: MusicControlKind.SetTempo, Value: 60 },
-            "Minimum tempo did not map."
+                && command is { Kind: MusicControlKind.SetKnob, Index: 5, Value: 0 },
+            "Minimum device parameter did not map."
         );
         Check.That(
             mapper.TryMap(Cc(26, 127), out command)
-                && command is { Kind: MusicControlKind.SetTempo, Value: 180 },
-            "Maximum tempo did not map."
+                && command is { Kind: MusicControlKind.SetKnob, Index: 5, Value: 1 },
+            "Maximum device parameter did not map."
         );
         Check.That(
-            !mapper.TryMap(Cc(27, 127), out _) && !mapper.TryMap(Cc(28, 127), out _),
-            "Unassigned pots produced commands."
+            mapper.TryMap(Cc(27, 127), out command) && command?.Index == 6
+                && mapper.TryMap(Cc(28, 127), out command)
+                && command?.Index
+                == 7,
+            "The last two device parameters must be available."
         );
         Check.That(
-            !mapper.TryMap(Cc(9, 3), out _) && mapper.PotMode == 3,
+            mapper.TryMap(Cc(9, 3), out command) && mapper.PotMode == 3 && command?.Kind
+                == MusicControlKind.SelectControlBank
+                && command.Index == (int)ControllerControlBank.Pan,
             "Pan mode report did not update state."
         );
-        Check.That(!mapper.TryMap(Cc(21, 127), out _), "Pan mode incorrectly changed volume.");
         Check.That(
-            !mapper.TryMap(Cc(9, 4), out _) && !mapper.TryMap(Cc(21, 127), out _),
-            "Send mode incorrectly changed volume."
+            mapper.TryMap(Cc(21, 127), out command) && command?.Kind == MusicControlKind.SetKnob
+                && command.ControlBank == ControllerControlBank.Pan,
+            "Pan mode must identify its own parameter bank."
         );
         Check.That(
-            !mapper.TryMap(Cc(9, 1), out _) && mapper.TryMap(Cc(21, 127), out _),
+            mapper.TryMap(Cc(9, 4), out _)
+                && mapper.TryMap(Cc(21, 127), out command)
+                && command?.ControlBank
+                == ControllerControlBank.SendA,
+            "Send mode must identify its own parameter bank."
+        );
+        Check.That(
+            mapper.TryMap(Cc(9, 1), out _)
+                && mapper.TryMap(Cc(21, 127), out command)
+                && command?.ControlBank
+                == ControllerControlBank.Volume,
             "Volume mode was not supported."
         );
         Check.That(
@@ -111,6 +128,90 @@ internal static class ControlMappingTests
         PrimaryButton(75, MusicControlKind.QuantizeSelectedTrack, "Quantise");
         PrimaryButton(118, MusicControlKind.ToggleLoop, "Loop");
         PrimaryButton(74, MusicControlKind.CaptureRecentPerformance, "Capture MIDI");
+    }
+
+    public static void SoundModes()
+    {
+        var mapper = new LaunchkeyControlMapper();
+        ControllerControlBank[] banks = [
+            ControllerControlBank.Volume, ControllerControlBank.Device, ControllerControlBank.Pan,
+            ControllerControlBank.SendA, ControllerControlBank.SendB
+        ];
+
+        for (int mode = 1; mode <= 5; mode++)
+        {
+            Check.That(
+                mapper.TryMap(Cc(9, mode), out MusicControlEvent? command)
+                    && command is { Kind: MusicControlKind.SelectControlBank }
+                    && command.Index == (int)banks[mode - 1],
+                "A mode report must update the semantic bank."
+            );
+
+            for (int knob = 0; knob < 8; knob++)
+            {
+                foreach (int value in new[] { 0, 64, 127 })
+                {
+                    Check.That(
+                        mapper.TryMap(Cc(21 + knob, value), out command) && command?.Kind
+                            == MusicControlKind.SetKnob
+                            && command.Index == knob
+                            && command.ControlBank == banks[mode - 1]
+                            && command.Value == value / 127.0,
+                        "Every pot must retain its index, bank, and zero/full values."
+                    );
+                }
+            }
+        }
+
+        foreach (int mode in new[] { 0, 6, 7, 8, 9, 127 })
+        {
+            Check.That(
+                mapper.TryMap(Cc(9, mode), out MusicControlEvent? command) && command?.Index
+                    == (int)ControllerControlBank.Custom
+                    && !mapper.TryMap(Cc(21, 127), out _),
+                "Custom and unknown modes must retain hardware ownership."
+            );
+        }
+
+        _ = mapper.TryMap(Cc(3, 9), out _);
+        Check.That(
+            mapper.TryMap(Cc(106, 127), out MusicControlEvent? previous)
+                && previous is { Kind: MusicControlKind.MoveSoundDevice, Index: -1 }
+                && mapper.TryMap(Cc(107, 127), out MusicControlEvent? next)
+                && next is { Kind: MusicControlKind.MoveSoundDevice, Index: 1 },
+            "Device Select arrows must navigate devices in order."
+        );
+
+        for (int page = 0; page < 8; page++)
+        {
+            Check.That(
+                mapper.TryMap(
+                    new(MidiInputKind.NoteOn, 0, 64 + page, 127, false),
+                    out MusicControlEvent? command
+                )
+                    && command is { Kind: MusicControlKind.SelectParameterPage }
+                    && command.Index == page,
+                "The top Device Select row must identify parameter pages."
+            );
+            Check.That(
+                !mapper.TryMap(new(MidiInputKind.NoteOn, 0, 80 + page, 127, false), out _)
+                    && !mapper.TryMap(new(MidiInputKind.NoteOn, 0, 64 + page, 0, false), out _),
+                "Undocumented lower-row roles and page releases must remain inactive."
+            );
+        }
+
+        Check.That(
+            mapper.TryMap(Cc(52, 127), out MusicControlEvent? locked) && locked?.Kind
+                == MusicControlKind.ToggleSoundDeviceLock
+                && !mapper.TryMap(Cc(52, 0), out _),
+            "Device Lock must toggle once on press."
+        );
+        _ = mapper.TryMap(Cc(3, 1), out _);
+        Check.That(
+            !mapper.TryMap(Cc(106, 127), out _)
+                && !mapper.TryMap(new(MidiInputKind.NoteOn, 0, 64, 127, false), out _),
+            "Leaving Device Select must stop page/device navigation."
+        );
     }
 
     private static void PrimaryButton(byte number, MusicControlKind kind, string name)

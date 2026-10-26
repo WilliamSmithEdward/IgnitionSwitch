@@ -1,7 +1,8 @@
 using IgnitionSwitch.Core.Audio;
+using IgnitionSwitch.Core.Audio.Effects;
+using IgnitionSwitch.Core.Audio.Mixing;
 using IgnitionSwitch.Core.Domain;
 using IgnitionSwitch.Core.Persistence;
-using IgnitionSwitch.Core.Sequencing.History;
 
 namespace IgnitionSwitch.Core.Sequencing;
 
@@ -71,8 +72,7 @@ public sealed partial class WorkstationEngine : IDisposable
             lock (_sync)
             {
                 ThrowIfDisposed();
-                _history.RecordScalar(new(HistoryProperty.Tempo, -1, _tempo, value), true);
-                _tempo = value;
+                SetStoredParameter(new(ParameterId.Tempo), value);
             }
         }
     }
@@ -160,11 +160,7 @@ public sealed partial class WorkstationEngine : IDisposable
             lock (_sync)
             {
                 ThrowIfDisposed();
-                _history.RecordScalar(
-                    new(HistoryProperty.MasterVolume, -1, _masterVolume, value),
-                    true
-                );
-                _masterVolume = value;
+                SetStoredParameter(new(ParameterId.MasterVolume), value);
             }
         }
     }
@@ -254,6 +250,7 @@ public sealed partial class WorkstationEngine : IDisposable
             ResetPlaybackPosition();
             _held.Clear();
             _voices.Clear();
+            ResetEffects();
 
             foreach (Track track in _tracks)
             {
@@ -315,6 +312,7 @@ public sealed partial class WorkstationEngine : IDisposable
     }
 
     /// <summary>Plays a live note and optionally retains its clocked performance for retrospective capture; false excludes unavailable-audio input from that history.</summary>
+    /// <remarks>At most 64 voices sound at once. Sequenced voices are replaced before live voices; fresh live attacks retain their first 4 ms against sequenced replacement. More than 64 simultaneous live attacks still replace the oldest live voice.</remarks>
     public void NoteOn(int track, int note, int velocity, bool retainForCapture)
     {
         ValidateTrack(track);
@@ -339,7 +337,7 @@ public sealed partial class WorkstationEngine : IDisposable
             }
 
             int id = NextVoiceId();
-            AddVoice(new SynthVoice(id, track, note, velocity, _tracks[track].Instrument, false));
+            AddVoice(CreateVoice(id, track, note, velocity, false));
             _performance.NoteOn(
                 track,
                 note,
@@ -462,6 +460,7 @@ public sealed partial class WorkstationEngine : IDisposable
             _performance.CloseAll();
             _held.Clear();
             _voices.Clear();
+            ResetEffects();
             _pitchRatio = 1;
 
             foreach (Track track in _tracks)
@@ -517,16 +516,7 @@ public sealed partial class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
-            _history.RecordScalar(
-                new(
-                    HistoryProperty.TrackMute,
-                    track,
-                    _tracks[track].IsMuted ? 1 : 0,
-                    muted ? 1 : 0
-                ),
-                false
-            );
-            _tracks[track].IsMuted = muted;
+            SetStoredParameter(new(ParameterId.TrackMute, track), muted ? 1 : 0);
         }
     }
 
@@ -539,11 +529,7 @@ public sealed partial class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
-            _history.RecordScalar(
-                new(HistoryProperty.TrackVolume, track, _tracks[track].Volume, volume),
-                true
-            );
-            _tracks[track].Volume = volume;
+            SetStoredParameter(new(ParameterId.Level, track), volume);
         }
     }
 
@@ -600,28 +586,12 @@ public sealed partial class WorkstationEngine : IDisposable
                         }
                     }
 
-                    float mixed = 0;
-
-                    for (int voiceIndex = _voices.Count - 1; voiceIndex >= 0; voiceIndex--)
-                    {
-                        SynthVoice voice = _voices[voiceIndex];
-                        float value = voice.Render(_pitchRatio);
-                        Track track = _tracks[voice.Track];
-
-                        if (!track.IsMuted)
-                        {
-                            mixed += value * track.Volume;
-                        }
-
-                        if (voice.IsFinished)
-                        {
-                            _voices.RemoveAt(voiceIndex);
-                        }
-                    }
+                    StereoSample mixed = RenderMixedFrame();
+                    float click = 0;
 
                     if (_clickSamples > 0)
                     {
-                        mixed +=
+                        click =
                             (float)(Math.Sin(
                                 2 * Math.PI * _clickFrequency * _clickSamples / SampleRate
                             )
@@ -631,10 +601,11 @@ public sealed partial class WorkstationEngine : IDisposable
                         _clickSamples--;
                     }
 
-                    mixed *= _masterVolume;
-                    float output = MathF.Tanh(mixed);
-                    samples[sample] = output;
-                    samples[sample + 1] = output;
+                    float master = _masterGain.Next();
+                    float left = (mixed.Left + click) * master;
+                    float right = (mixed.Right + click) * master;
+                    samples[sample] = MathF.Tanh(left);
+                    samples[sample + 1] = MathF.Tanh(right);
                     _performance.Advance(beatsPerSample);
 
                     if (_isPlaying)
@@ -683,16 +654,19 @@ public sealed partial class WorkstationEngine : IDisposable
                             track.Notes
                                 .Select(note => note.Note)
                                 .ToArray()
-                        )
+                        ),
+                        track.Sound.Snapshot()
                     )
                 )
             ];
             return new SessionSnapshot(
-                1,
+                2,
                 _tempo,
                 LoopBars,
                 _masterVolume,
-                Array.AsReadOnly(tracks)
+                Array.AsReadOnly(tracks),
+                _effects.DelaySnapshot(),
+                _effects.ReverbSnapshot()
             );
         }
     }
@@ -708,6 +682,8 @@ public sealed partial class WorkstationEngine : IDisposable
             Stop();
             _tempo = session.Tempo;
             _masterVolume = session.MasterVolume;
+            _masterGain.SetTarget(_masterVolume, true);
+            _effects.Apply(session.Delay!, session.Reverb!);
 
             for (int track = 0; track < TrackCount; track++)
             {
@@ -715,6 +691,8 @@ public sealed partial class WorkstationEngine : IDisposable
                 Track target = _tracks[track];
                 target.Name = source.Name;
                 target.Instrument = source.Instrument;
+                target.Sound = new(source.Instrument);
+                target.Sound.Apply(source.Sound!, source.Volume);
                 target.IsMuted = source.IsMuted;
                 target.Volume = source.Volume;
                 target.Notes.Clear();
@@ -789,7 +767,36 @@ public sealed partial class WorkstationEngine : IDisposable
     {
         if (_voices.Count >= MaximumVoices)
         {
-            _voices.RemoveAt(0);
+            int loop = -1;
+            int unprotectedLive = -1;
+
+            for (int index = 0; index < _voices.Count; index++)
+            {
+                SynthVoice existing = _voices[index];
+
+                if (existing.IsLoop)
+                {
+                    loop = index;
+                    break;
+                }
+
+                if (unprotectedLive < 0 && !existing.IsProtectedLiveAttack)
+                {
+                    unprotectedLive = index;
+                }
+            }
+
+            int victim = loop >= 0
+                ? loop
+                : unprotectedLive >= 0 ? unprotectedLive : voice.IsLoop ? -1 : 0;
+
+            if (victim < 0)
+            {
+                return;
+            }
+
+            // More than 64 simultaneous live attacks still require oldest-live replacement.
+            _voices.RemoveAt(victim);
         }
 
         _voices.Add(voice);
@@ -824,7 +831,7 @@ public sealed partial class WorkstationEngine : IDisposable
         {
             if (voice.Id == held.Id)
             {
-                voice.Release();
+                voice.Release(_tracks[held.Track].Sound.ReleasePhysical);
             }
         }
 
@@ -1088,16 +1095,7 @@ public sealed partial class WorkstationEngine : IDisposable
 
             if (!_tracks[note.Track].IsMuted)
             {
-                AddVoice(
-                    new SynthVoice(
-                        note.Id,
-                        note.Track,
-                        note.Note,
-                        note.Velocity,
-                        _tracks[note.Track].Instrument,
-                        true
-                    )
-                );
+                AddVoice(CreateVoice(note.Id, note.Track, note.Note, note.Velocity, true));
             }
         }
 
@@ -1113,7 +1111,7 @@ public sealed partial class WorkstationEngine : IDisposable
         {
             if (voice.Id == id && voice.IsLoop)
             {
-                voice.Release();
+                voice.Release(_tracks[voice.Track].Sound.ReleasePhysical);
             }
         }
     }
@@ -1136,7 +1134,14 @@ public sealed partial class WorkstationEngine : IDisposable
         public string ColorHex { get; } = colorHex;
         public bool IsMuted { get; set; }
         public bool Sustain { get; set; }
-        public float Volume { get; set; } = 0.8f;
+        public TrackSoundState Sound { get; set; } = new(instrument);
+
+        public float Volume
+        {
+            get => Sound.Level.Target;
+            set => Sound.Level.SetTarget(value, true);
+        }
+
         public List<StoredNote> Notes { get; } = new(MaximumNotesPerTrack);
     }
 

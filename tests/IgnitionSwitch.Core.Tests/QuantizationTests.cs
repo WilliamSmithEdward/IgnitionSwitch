@@ -49,8 +49,8 @@ internal static class QuantizationTests
             using WorkstationEngine restored = CreateEngine();
             restored.ApplySession(engine.CaptureSession());
             Check.That(
-                restored.RecordingQuantizationEnabled && restored.CaptureSession().Version == 1,
-                "Projects retain schema one and do not persist the recording preference."
+                restored.RecordingQuantizationEnabled && restored.CaptureSession().Version == 2,
+                "Projects retain schema two and do not persist the recording preference."
             );
         }
 

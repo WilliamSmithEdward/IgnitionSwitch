@@ -32,5 +32,15 @@ public enum MusicControlKind
     /// <summary>Toggles whether playback repeats at the loop boundary.</summary>
     ToggleLoop,
     /// <summary>Captures recently performed notes into the project.</summary>
-    CaptureRecentPerformance
+    CaptureRecentPerformance,
+    /// <summary>Sets absolute knob Index in ControlBank to the normalized Value, subject to pickup.</summary>
+    SetKnob,
+    /// <summary>Changes the active surface bank to Index.</summary>
+    SelectControlBank,
+    /// <summary>Moves the selected sound device by Index (-1 or +1).</summary>
+    MoveSoundDevice,
+    /// <summary>Selects parameter page Index of the current sound device.</summary>
+    SelectParameterPage,
+    /// <summary>Retains the actual sound device across track selection.</summary>
+    ToggleSoundDeviceLock
 }

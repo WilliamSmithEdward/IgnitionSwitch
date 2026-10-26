@@ -5,6 +5,7 @@ internal interface IAudioPlayback : IDisposable
 {
     string Status { get; }
     bool IsRunning { get; }
+    AudioOutputMode Mode { get; set; }
 
     void Start();
 

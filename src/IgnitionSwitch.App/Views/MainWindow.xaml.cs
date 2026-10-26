@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using IgnitionSwitch.App.Audio;
@@ -23,6 +24,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly LoopTimeline timeline;
     private readonly WorkspaceLayout workspaceLayout;
     private readonly SliderMotion masterMotion;
+    private readonly SoundInspector soundInspector;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly List<TrackControls> trackControls = [];
     private readonly List<SliderMotion> trackMotions = [];
@@ -36,6 +38,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool dialogOpen;
     private bool disposed;
     private bool showingAudioError;
+    private bool devicesFlyoutOpen;
+    private PerformanceInputDiagnostics.Snapshot? displayedInputDiagnostics;
     private long timelineRevision = -1;
     private long lastStateRefresh;
     private double minimumWindowScale;
@@ -61,6 +65,16 @@ public sealed partial class MainWindow : Window, IDisposable
         });
         BuildInstruments();
         masterMotion = new SliderMotion(MasterSlider);
+        soundInspector = new SoundInspector(
+            session,
+            SoundFlyout,
+            SoundScroll,
+            SoundTitleText,
+            SoundTargetBox,
+            SoundLockToggle,
+            SoundParameterPanel,
+            SoundButton
+        );
         session.Controller.ControlReceived += OnControllerControlReceived;
         session.PerformanceChanged += OnPerformanceChanged;
         session.PerformanceReset += OnPerformanceReset;
@@ -77,6 +91,17 @@ public sealed partial class MainWindow : Window, IDisposable
             LoopResizeHandle
         );
         WireControls();
+        DevicesFlyout.Opening += (_, _) =>
+        {
+            devicesFlyoutOpen = true;
+            RefreshInputDiagnostics();
+        };
+        DevicesFlyout.Closed += (_, _) => devicesFlyoutOpen = false;
+        ResetInputCounterButton.Click += (_, _) =>
+        {
+            session.ResetInputDiagnostics();
+            RefreshInputDiagnostics();
+        };
         Content.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
         timer.Tick += (_, _) =>
         {
@@ -121,6 +146,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         disposed = true;
+        devicesFlyoutOpen = false;
         timer.Stop();
 
         foreach (PadControls pad in padControls)
@@ -133,6 +159,7 @@ public sealed partial class MainWindow : Window, IDisposable
         session.CaptureCompleted -= OnCaptureCompleted;
         session.Controller.ControlReceived -= OnControllerControlReceived;
         masterMotion.Dispose();
+        soundInspector.Dispose();
 
         foreach (SliderMotion motion in trackMotions)
         {
@@ -169,8 +196,7 @@ public sealed partial class MainWindow : Window, IDisposable
             {
                 if (!updating)
                 {
-                    session.Engine.SetTrackVolume(trackIndex, (float)args.NewValue);
-                    session.MarkChanged();
+                    _ = session.SetParameter(new(ParameterId.Level, trackIndex), args.NewValue);
                 }
             };
             trackControls.Add(controls);
@@ -259,20 +285,41 @@ public sealed partial class MainWindow : Window, IDisposable
             session.Audio.Start();
             session.Controller.Connect();
         };
-        TempoBox.ValueChanged += (_, args) =>
+        AudioModeBox.SelectionChanged += (sender, args) =>
+        {
+            if (updating || session.IsInteractionBlocked || AudioModeBox.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            AudioOutputMode mode = AudioModeBox.SelectedIndex == 1
+                ? AudioOutputMode.ExclusiveLowLatency
+                : AudioOutputMode.Shared;
+
+            if (session.Audio.Mode != mode)
+            {
+                session.Stop();
+                session.Audio.Mode = mode;
+                session.Audio.Start();
+                RefreshState();
+            }
+        };
+        TempoBox.ValueChanged += (sender, args) =>
         {
             if (!updating && double.IsFinite(args.NewValue))
             {
-                session.Engine.Tempo = Math.Clamp(args.NewValue, 60, 180);
-                session.MarkChanged();
+                var address = new ParameterAddress(ParameterId.Tempo);
+                double normalized = session.Engine
+                    .GetDescriptor(address)
+                    .ToNormalized(Math.Clamp(args.NewValue, 60, 180));
+                _ = session.SetParameter(address, normalized);
             }
         };
         MasterSlider.ValueChanged += (_, args) =>
         {
             if (!updating)
             {
-                session.Engine.MasterVolume = (float)args.NewValue;
-                session.MarkChanged();
+                _ = session.SetParameter(new(ParameterId.MasterVolume), args.NewValue);
             }
         };
         WireEditGesture(MasterSlider);
@@ -280,11 +327,10 @@ public sealed partial class MainWindow : Window, IDisposable
             session.Engine.MetronomeEnabled = MetronomeToggle.IsChecked == true;
         MuteButton.Click += (_, _) =>
         {
-            session.Engine.SetTrackMuted(
-                session.Engine.SelectedTrack,
-                MuteButton.IsChecked == true
+            _ = session.SetParameter(
+                new(ParameterId.TrackMute, session.Engine.SelectedTrack),
+                MuteButton.IsChecked == true ? 1 : 0
             );
-            session.MarkChanged();
         };
         RepeatLoopItem.Click += (_, _) =>
         {
@@ -366,7 +412,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         if (!disposed)
         {
-            session.Engine.CommitEdit();
+            session.CompleteParameterGesture();
         }
     }
 
@@ -465,6 +511,34 @@ public sealed partial class MainWindow : Window, IDisposable
         }
     }
 
+    private void RefreshInputDiagnostics()
+    {
+        if (!devicesFlyoutOpen || disposed)
+        {
+            return;
+        }
+
+        FlyoutViewport.Update(DevicesScroll, (FrameworkElement)Content);
+        PerformanceInputDiagnostics.Snapshot snapshot = session.ReadInputDiagnostics();
+
+        if (displayedInputDiagnostics == snapshot)
+        {
+            return;
+        }
+
+        displayedInputDiagnostics = snapshot;
+        DrumInputCountText.Text = snapshot.DrumNoteOnCount.ToString(
+            "N0",
+            CultureInfo.CurrentCulture
+        );
+        DrumInputVelocityText.Text = snapshot.DrumNoteOnCount == 0
+            ? "—"
+            : snapshot.LastDrumVelocity.ToString(CultureInfo.CurrentCulture);
+        DrumInputRangeText.Text = snapshot.DrumNoteOnCount == 0
+            ? "—"
+            : $"{snapshot.MinimumDrumVelocity}–{snapshot.MaximumDrumVelocity}";
+    }
+
     private void RefreshState()
     {
         lastStateRefresh = Environment.TickCount64;
@@ -480,11 +554,17 @@ public sealed partial class MainWindow : Window, IDisposable
         IReadOnlyList<TrackState> tracks = engine.Tracks;
         ConnectionText.Text = session.Controller.Status;
         AudioText.Text = session.Audio.Status;
+        AudioModeBox.SelectedIndex = session.Audio.Mode == AudioOutputMode.ExclusiveLowLatency
+            ? 1
+            : 0;
+        AudioModeBox.IsEnabled = !session.IsInteractionBlocked;
+        RefreshInputDiagnostics();
         DeviceNameText.Text = session.Controller.Identity?.Model ?? "Devices";
         DeviceStatusDot.Fill = InstrumentControls.Brush(
             session.Controller.IsConnected ? "#6AD7E1" : "#9CA8BA"
         );
         SessionTitleText.Text = session.HasChanges ? $"{sessionName} · Unsaved" : sessionName;
+        SoundButton.IsEnabled = !session.IsInteractionBlocked;
         PlayButton.IsEnabled = session.Audio.IsRunning;
         RecordButton.IsEnabled = session.Audio.IsRunning;
         PlayIcon.Glyph = engine.IsPlaying ? "\uE769" : "\uE768";
@@ -547,6 +627,7 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         session.RefreshFeedback();
+        soundInspector.Refresh();
 
         if (!session.Audio.IsRunning)
         {
@@ -590,10 +671,13 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void OnControllerControlReceived(object? sender, MusicControlEvent control)
     {
-        if (control.Kind is MusicControlKind.SetTrackVolume or MusicControlKind.SetMasterVolume)
+        if (
+            control.Kind is MusicControlKind.SetTrackVolume
+                or MusicControlKind.SetMasterVolume
+                or MusicControlKind.SetKnob
+        )
         {
             _ = Interlocked.Exchange(ref mixerRefreshRequested, 1);
-            return;
         }
 
         _ = Interlocked.Exchange(ref stateRefreshRequested, 1);

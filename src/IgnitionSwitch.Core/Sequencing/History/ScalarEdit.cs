@@ -1,8 +1,5 @@
+using IgnitionSwitch.Core.Domain;
+
 namespace IgnitionSwitch.Core.Sequencing.History;
 
-internal readonly record struct ScalarEdit(
-    HistoryProperty Property,
-    int Track,
-    double Before,
-    double After
-);
+internal readonly record struct ScalarEdit(ParameterAddress Address, double Before, double After);

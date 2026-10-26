@@ -3,6 +3,26 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Exclusive buffer requests validate and round the driver's minimum period",
+        ExclusiveAudioBufferTests.MinimumPeriod
+    ),
+    (
+        "Received drum MIDI diagnostics retain every input and reset independently of music state",
+        InputDiagnosticsTests.CountingAndReset
+    ),
+    (
+        "Sound pages share real parameter targets, revision, undo, locks, and modal lifecycle",
+        SoundControlTests.PagesAndLifecycle
+    ),
+    (
+        "Every device knob and mixer bank controls its advertised parameter",
+        SoundControlTests.HardwareBanks
+    ),
+    (
+        "Absolute knob pickup follows actual targets, external edits, and reconnection",
+        SoundControlTests.Pickup
+    ),
+    (
         "Capture commands preserve all-track ownership, undo, saves, modal guards, and project boundaries",
         CaptureCommandTests.Commands
     ),

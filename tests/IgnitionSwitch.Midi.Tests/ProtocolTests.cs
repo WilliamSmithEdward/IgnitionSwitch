@@ -161,6 +161,24 @@ internal static class ProtocolTests
         Check.Bytes([0x99, 36, 45], LaunchkeyMk3Protocol.SetDrumPad(36, 45));
         Check.Bytes([0x99, 51, 0], LaunchkeyMk3Protocol.SetDrumPad(51, 0));
         Check.Bytes([0x9B, 37, 5], LaunchkeyMk3Protocol.SetDrumPad(37, 5, true));
+        Check.Bytes([0x90, 64, 49], LaunchkeyMk3Protocol.SetDeviceSelectPad(0, 49));
+        Check.Bytes([0x90, 71, 0], LaunchkeyMk3Protocol.SetDeviceSelectPad(7, 0));
+        Check.Bytes([0x90, 80, 0], LaunchkeyMk3Protocol.SetDeviceSelectPad(8, 0));
+        Check.Bytes([0x90, 87, 3], LaunchkeyMk3Protocol.SetDeviceSelectPad(15, 3));
+        Check.Bytes([0xBF, 52, 127], LaunchkeyMk3Protocol.SetDeviceLock(true));
+        Check.Bytes([0xBF, 52, 0], LaunchkeyMk3Protocol.SetDeviceLock(false));
+        Check.Throws<ArgumentOutOfRangeException>(
+            () => LaunchkeyMk3Protocol.SetDeviceSelectPad(-1, 0)
+        );
+        Check.Throws<ArgumentOutOfRangeException>(
+            () => LaunchkeyMk3Protocol.SetDeviceSelectPad(16, 0)
+        );
+        Check.Throws<ArgumentOutOfRangeException>(
+            () => LaunchkeyMk3Protocol.SetDeviceSelectPad(0, -1)
+        );
+        Check.Throws<ArgumentOutOfRangeException>(
+            () => LaunchkeyMk3Protocol.SetDeviceSelectPad(0, 128)
+        );
         Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(35, 45));
         Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(52, 45));
         Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(36, -1));
