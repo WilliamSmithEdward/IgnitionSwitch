@@ -1,5 +1,21 @@
 (string Name, Func<Task> Run)[] tests =
 [
+    ("Scenes own clip content with bounded structural history", SceneTests.ContentAndHistory),
+    ("Scene schema migration and total capacity are atomic", SceneTests.PersistenceAndCapacity),
+    ("Quantized clip queues preserve independent transport state", SceneTests.QueuesAndTransport),
+    (
+        "Recording follows active clips and splits held gates at launches",
+        SceneTests.RecordingOwnership
+    ),
+    (
+        "Empty scene launches and recording rearm retain the first performed hit",
+        SceneTests.EmptyRecordingWorkflow
+    ),
+    ("Capture aligns mixed clip phases and retains addressed undo", SceneTests.CaptureAlignment),
+    (
+        "Clip launches preserve live audio and callback partition equivalence",
+        SceneTests.AudioAndPartitions
+    ),
     ("Playable instruments produce bounded finite stereo audio", AudioTests.Instruments),
     (
         "Normalized mixer targets share metadata, validation, stereo routing, and history",

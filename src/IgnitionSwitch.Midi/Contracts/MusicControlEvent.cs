@@ -5,7 +5,8 @@ public sealed class MusicControlEvent(
     MusicControlKind kind,
     int index = 0,
     double value = 0,
-    ControllerControlBank controlBank = ControllerControlBank.Device
+    ControllerControlBank controlBank = ControllerControlBank.Device,
+    int row = 0
 )
 {
     /// <summary>The command to execute.</summary>
@@ -19,4 +20,7 @@ public sealed class MusicControlEvent(
 
     /// <summary>The bank that gives an absolute knob its meaning.</summary>
     public ControllerControlBank ControlBank { get; } = controlBank;
+
+    /// <summary>Zero-based visible session row for TriggerSessionPad; otherwise zero.</summary>
+    public int Row { get; } = row;
 }

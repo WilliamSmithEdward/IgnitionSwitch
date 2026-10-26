@@ -16,6 +16,7 @@ public static class SessionStore
         WriteIndented = true,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         RespectRequiredConstructorParameters = true,
+        RespectNullableAnnotations = true,
         MaxDepth = 16
     };
 
@@ -28,7 +29,10 @@ public static class SessionStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         SessionSnapshot validated = ValidateSession(session);
-        byte[] content = JsonSerializer.SerializeToUtf8Bytes(validated, SerializerOptions);
+        byte[] content = JsonSerializer.SerializeToUtf8Bytes(
+            ToDocument(validated),
+            SerializerOptions
+        );
 
         if (content.Length > MaximumFileBytes)
         {
@@ -119,7 +123,10 @@ public static class SessionStore
             session = schema switch
             {
                 1 => ImportLegacy(root.Deserialize<LegacySessionDocument>(SerializerOptions)),
-                2 => root.Deserialize<SessionSnapshot>(SerializerOptions),
+                2 => ImportVersionTwo(
+                    root.Deserialize<VersionTwoSessionDocument>(SerializerOptions)
+                ),
+                3 => ImportScenes(root.Deserialize<SceneSessionDocument>(SerializerOptions)),
                 _ => throw new InvalidDataException("Unsupported project version.")
             };
         }
@@ -139,7 +146,7 @@ public static class SessionStore
     {
         if (
             session is null
-            || session.Version is not (1 or 2)
+            || session.Version is not (1 or 2 or 3)
             || session.LoopBars != 4
             || !InRange(session.Tempo, 60, 180)
             || !InRange(session.MasterVolume, 0, 1)
@@ -164,7 +171,7 @@ public static class SessionStore
             );
         }
 
-        if (session.Version == 2 && (session.Delay is null || session.Reverb is null))
+        if (session.Version >= 2 && (session.Delay is null || session.Reverb is null))
         {
             throw new InvalidDataException("Version two projects require effect settings.");
         }
@@ -178,7 +185,30 @@ public static class SessionStore
             ]
         );
 
+        IReadOnlyList<SceneState> scenes = session.Scenes ?? [new(0, "Scene 1")];
+
+        if (
+            (session.Version == 3 && session.Scenes is null)
+            || (session.Version < 3 && session.Scenes is not null)
+            || scenes.Count is < 1
+                or > WorkstationEngine.MaximumScenes
+                    || scenes
+                        .Select(scene => scene?.Id)
+                        .Distinct()
+                        .Count()
+                        != scenes.Count
+                    || scenes.Any(
+                        scene => scene is null
+                            || scene.Id is < 0
+                            or >= WorkstationEngine.MaximumScenes || !ValidName(scene.Name)
+                    )
+        )
+        {
+            throw new InvalidDataException("The project's scene list is invalid.");
+        }
+
         TrackSnapshot[] tracks = [.. session.Tracks];
+        int totalNotes = 0;
 
         for (int index = 0; index < tracks.Length; index++)
         {
@@ -186,39 +216,64 @@ public static class SessionStore
 
             if (
                 track is null
-                || string.IsNullOrWhiteSpace(track.Name)
-                || track.Name.Length > 32
-                || track.Name.Any(char.IsControl)
+                || !ValidName(track.Name)
                 || !Enum.IsDefined(track.Instrument)
                 || !InRange(track.Volume, 0, 1)
-                || track.Notes is null
-                || track.Notes.Count > WorkstationEngine.MaximumNotesPerTrack
-                || (session.Version == 2 && track.Sound is null)
+                || track.Clips is null
+                || (session.Version >= 2 && track.Sound is null)
+                || track.Clips.Count != scenes.Count
+                || track.Clips
+                    .Select(clip => clip?.SceneId)
+                    .Distinct()
+                    .Count()
+                    != scenes.Count
             )
             {
                 throw new InvalidDataException(
-                    "A project track has an invalid name, instrument, volume, or note count."
+                    "A project track has invalid metadata or clip ownership."
                 );
             }
 
-            LoopNote[] notes = [.. track.Notes];
+            var clips = new ClipSnapshot[scenes.Count];
 
-            foreach (LoopNote note in notes)
+            for (int clipIndex = 0; clipIndex < clips.Length; clipIndex++)
             {
+                ClipSnapshot clip = track.Clips[clipIndex];
+
                 if (
-                    note is null
-                        || note.Note is < 0
-                        or > 127 || note.Velocity is < 1
-                        or > 127
-                            || !InRange(note.Beat, 0, 16)
-                            || note.Beat >= 16
-                            || !InRange(note.Duration, double.Epsilon, 16)
+                    clip is null
+                    || !scenes.Any(scene => scene.Id == clip.SceneId)
+                    || clip.Notes is null
+                    || clip.Notes.Count > WorkstationEngine.MaximumNotesPerTrack
                 )
                 {
                     throw new InvalidDataException(
-                        "A project note is outside the supported MIDI or loop range."
+                        "A project clip has invalid ownership or note count."
                     );
                 }
+
+                LoopNote[] notes = [.. clip.Notes];
+                totalNotes += notes.Length;
+
+                foreach (LoopNote note in notes)
+                {
+                    if (
+                        note is null
+                            || note.Note is < 0
+                            or > 127 || note.Velocity is < 1
+                            or > 127
+                                || !InRange(note.Beat, 0, 16)
+                                || note.Beat >= 16
+                                || !InRange(note.Duration, double.Epsilon, 16)
+                    )
+                    {
+                        throw new InvalidDataException(
+                            "A project note is outside the supported MIDI or loop range."
+                        );
+                    }
+                }
+
+                clips[clipIndex] = new(clip.SceneId, Array.AsReadOnly(notes));
             }
 
             TrackSoundSettings sound = track.Sound
@@ -231,18 +286,111 @@ public static class SessionStore
             );
             tracks[index] = track with
             {
-                Notes = Array.AsReadOnly(notes),
+                Clips = Array.AsReadOnly(clips),
                 Sound = sound
             };
         }
 
-        return session with
-        {
-            Version = 2,
-            Tracks = Array.AsReadOnly(tracks),
-            Delay = delay,
-            Reverb = reverb
-        };
+        return totalNotes > WorkstationEngine.MaximumTotalNotes
+            ? throw new InvalidDataException("The project exceeds its total note budget.")
+            : (session with
+            {
+                Version = 3,
+                Tracks = Array.AsReadOnly(tracks),
+                Delay = delay,
+                Reverb = reverb,
+                Scenes = Array.AsReadOnly(scenes.ToArray())
+            });
+    }
+
+    private static bool ValidName(string? name)
+    {
+        return !string.IsNullOrWhiteSpace(name) && name.Length <= 32 && !name.Any(char.IsControl);
+    }
+
+    private static SceneSessionDocument ToDocument(SessionSnapshot session)
+    {
+        return new(
+            3,
+            session.Tempo,
+            session.LoopBars,
+            session.MasterVolume,
+            Array.AsReadOnly(
+                session.Tracks
+                    .Select(
+                        track => new SceneTrackDocument(
+                            track.Name,
+                            track.Instrument,
+                            track.IsMuted,
+                            track.Volume,
+                            track.Clips,
+                            track.Sound!
+                        )
+                    )
+                    .ToArray()
+            ),
+            session.Delay!,
+            session.Reverb!,
+            session.Scenes!
+        );
+    }
+
+    private static SessionSnapshot? ImportScenes(SceneSessionDocument? document)
+    {
+        return document is null
+            ? null
+            : new(
+                document.Version,
+                document.Tempo,
+                document.LoopBars,
+                document.MasterVolume,
+                document.Tracks
+                    ?.Select(
+                        track => track is null
+                            ? null!
+                            : new TrackSnapshot(
+                                track.Name,
+                                track.Instrument,
+                                track.IsMuted,
+                                track.Volume,
+                                [],
+                                track.Sound,
+                                track.Clips
+                            )
+                    )
+                    .ToArray()!,
+                document.Delay,
+                document.Reverb,
+                document.Scenes
+            );
+    }
+
+    private static SessionSnapshot? ImportVersionTwo(VersionTwoSessionDocument? document)
+    {
+        return document is null
+            ? null
+            : new(
+                document.Version,
+                document.Tempo,
+                document.LoopBars,
+                document.MasterVolume,
+                document.Tracks
+                    ?.Select(
+                        track => track is null
+                            ? null!
+                            : new TrackSnapshot(
+                                track.Name,
+                                track.Instrument,
+                                track.IsMuted,
+                                track.Volume,
+                                track.Notes,
+                                track.Sound
+                            )
+                    )
+                    .ToArray()!,
+                document.Delay,
+                document.Reverb
+            );
     }
 
     private static SessionSnapshot? ImportLegacy(LegacySessionDocument? document)

@@ -6,25 +6,34 @@ using IgnitionSwitch.Core.Persistence;
 
 namespace IgnitionSwitch.Core.Sequencing;
 
-/// <summary>A thread-safe, sample-clocked four-track synthesizer and MIDI loop recorder.</summary>
+/// <summary>A thread-safe, sample-clocked four-track synthesizer and scene-based clip recorder.</summary>
 public sealed partial class WorkstationEngine : IDisposable
 {
     /// <summary>The fixed rendering sample rate in frames per second.</summary>
     public const int SampleRate = 48000;
 
-    /// <summary>The number of tracks supported by project schema version one.</summary>
+    /// <summary>The fixed number of instrument and mixer lanes.</summary>
     public const int TrackCount = 4;
 
-    /// <summary>The maximum number of recorded MIDI notes stored on each track.</summary>
+    /// <summary>The maximum number of recorded MIDI notes stored in one track clip.</summary>
+    /// <remarks>The legacy API name applies separately to each track/scene clip. Combined content is bounded by <see cref="MaximumTotalNotes"/>.</remarks>
     public const int MaximumNotesPerTrack = 2048;
+
+    /// <summary>The maximum number of scenes in a project.</summary>
+    public const int MaximumScenes = 8;
+
+    /// <summary>The combined note budget across all clips and scenes.</summary>
+    public const int MaximumTotalNotes = TrackCount * MaximumNotesPerTrack;
     private const double QuantizeBeats = 0.25;
     private const int MaximumVoices = 64;
     private const int RenderQuantumFrames = 64;
-    private const int MaximumProjectNotes = TrackCount * MaximumNotesPerTrack;
+    private const int MaximumProjectNotes = MaximumTotalNotes;
     private readonly Lock _sync = new();
     private readonly List<SynthVoice> _voices = new(MaximumVoices);
     private readonly Dictionary<(int Track, int Note), HeldNote> _held = new(TrackCount * 128);
-    private readonly Dictionary<int, long> _pendingLoopStarts = new(MaximumProjectNotes);
+    private readonly Dictionary<int, PendingLoopStart> _pendingLoopStarts = new(
+        MaximumProjectNotes
+    );
     private readonly Track[] _tracks =
     [
         new("Velvet keys", InstrumentKind.Keys, "#9B8CFF"),
@@ -32,8 +41,6 @@ public sealed partial class WorkstationEngine : IDisposable
         new("Soft atmosphere", InstrumentKind.Atmosphere, "#E7AF68"),
         new("Pocket drums", InstrumentKind.Drums, "#F279A2")
     ];
-    private readonly List<ScheduledNote> _schedule = new(MaximumProjectNotes * 2);
-    private int _scheduleCursor;
     private bool _isPlaying;
     private bool _isRecording;
     private bool _metronomeEnabled;
@@ -177,7 +184,7 @@ public sealed partial class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Gets a revision that changes only when recorded note content is added, replaced, cleared, or loaded.</summary>
+    /// <summary>Gets a revision for recorded note changes and scene metadata or structure changes. Mixer targets and transient playback choices do not change it.</summary>
     public long NoteRevision
     {
         get
@@ -189,7 +196,7 @@ public sealed partial class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Gets detached, read-only track state snapshots in display order.</summary>
+    /// <summary>Gets detached, read-only track state snapshots in display order, with note counts for the editing scene.</summary>
     public IReadOnlyList<TrackState> Tracks
     {
         get
@@ -203,7 +210,7 @@ public sealed partial class WorkstationEngine : IDisposable
                                 track.Name,
                                 track.Instrument,
                                 track.ColorHex,
-                                track.Notes.Count,
+                                track.Clips[_editingSceneId].Notes.Count,
                                 track.IsMuted,
                                 track.Volume
                             )
@@ -255,7 +262,10 @@ public sealed partial class WorkstationEngine : IDisposable
             foreach (Track track in _tracks)
             {
                 track.Sustain = false;
+                track.ActiveSceneId = null;
             }
+
+            _launchRevision++;
         }
     }
 
@@ -295,6 +305,7 @@ public sealed partial class WorkstationEngine : IDisposable
                 _history.Commit();
                 StartPlayback();
                 _isRecording = true;
+                ArmStoppedRecordingLanes();
             }
         }
     }
@@ -353,8 +364,10 @@ public sealed partial class WorkstationEngine : IDisposable
                 track,
                 note,
                 velocity,
-                _isRecording ? _absoluteBeat : null,
-                _recordingQuantizationEnabled
+                _isRecording && _tracks[track].ActiveSceneId is not null ? _absoluteBeat : null,
+                _recordingQuantizationEnabled,
+                _tracks[track].ActiveSceneId ?? _editingSceneId,
+                _tracks[track].Origin
             );
 
             if (_tracks[track].Instrument == InstrumentKind.Drums)
@@ -470,41 +483,56 @@ public sealed partial class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Clears recorded notes on the selected track without changing its instrument or mixer state.</summary>
+    /// <summary>Clears the selected track clip in the editing scene without changing its instrument or mixer state.</summary>
     public void ClearSelectedTrack()
     {
         lock (_sync)
         {
+            _ = ClearClip(new(_selectedTrack, _editingSceneId));
+        }
+    }
+
+    /// <summary>Clears one exact clip as an undoable edit, preserving selection, live voices, and unrelated clips. Returns false when already empty.</summary>
+    public bool ClearClip(ClipAddress address)
+    {
+        lock (_sync)
+        {
             ThrowIfDisposed();
-            Track selected = _tracks[_selectedTrack];
+            ValidateAddress(address);
+            Clip selected = _tracks[address.Track].Clips[address.SceneId];
 
-            if (selected.Notes.Count > 0)
+            if (selected.Notes.Count == 0)
             {
-                _history.Commit();
-
-                for (int index = selected.Notes.Count - 1; index >= 0; index--)
-                {
-                    StoredNote stored = selected.Notes[index];
-                    _history.RecordNote(new(_selectedTrack, stored.Id, index, stored.Note, null));
-                }
-
-                foreach (StoredNote stored in selected.Notes)
-                {
-                    _ = _pendingLoopStarts.Remove(stored.Id);
-                }
-
-                RemoveScheduledTrack(_selectedTrack);
-                selected.Notes.Clear();
-                _noteRevision++;
-                _history.Commit();
+                return false;
             }
 
-            foreach (HeldNote held in _held.Values.Where(held => held.Track == _selectedTrack))
+            _history.Commit();
+
+            for (int index = selected.Notes.Count - 1; index >= 0; index--)
             {
-                held.RecordStart = null;
+                StoredNote stored = selected.Notes[index];
+                _history.RecordNote(
+                    new(address.Track, stored.Id, index, stored.Note, null, address.SceneId)
+                );
+                _ = _pendingLoopStarts.Remove(stored.Id);
             }
 
-            _ = _voices.RemoveAll(voice => voice.Track == _selectedTrack && voice.IsLoop);
+            RemoveClipVoices(address);
+            selected.Notes.Clear();
+            selected.Schedule.Clear();
+            selected.Cursor = 0;
+
+            foreach (HeldNote held in _held.Values)
+            {
+                if (held.Track == address.Track && held.RecordSceneId == address.SceneId)
+                {
+                    held.RecordStart = null;
+                }
+            }
+
+            _noteRevision++;
+            _history.Commit();
+            return true;
         }
     }
 
@@ -560,17 +588,10 @@ public sealed partial class WorkstationEngine : IDisposable
 
                 for (; sample < quantumEnd; sample += 2)
                 {
-                    double position = _absoluteBeat % LoopBeats;
-
                     if (_isPlaying)
                     {
-                        while (
-                            _scheduleCursor < _schedule.Count
-                            && _schedule[_scheduleCursor].Beat <= position + 1e-9
-                        )
-                        {
-                            TriggerScheduled(_schedule[_scheduleCursor++]);
-                        }
+                        ApplyDueLaunches();
+                        RenderScheduledFrame();
 
                         long wholeBeat = (long)Math.Floor(_absoluteBeat + 1e-9);
 
@@ -621,12 +642,8 @@ public sealed partial class WorkstationEngine : IDisposable
                             _passCompleted = true;
                             _finishAtBeat = null;
                             EndSequencedPlayback();
-                            _scheduleCursor = _schedule.Count;
-                        }
-
-                        else if (_absoluteBeat % LoopBeats < position)
-                        {
-                            _scheduleCursor = 0;
+                            ClearLaunchQueues();
+                            _resumeExistingMix = false;
                         }
                     }
                 }
@@ -642,31 +659,44 @@ public sealed partial class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
-            TrackSnapshot[] tracks =
-            [
-                .. _tracks.Select(
-                    track => new TrackSnapshot(
-                        track.Name,
-                        track.Instrument,
-                        track.IsMuted,
-                        track.Volume,
-                        Array.AsReadOnly(
-                            track.Notes
-                                .Select(note => note.Note)
-                                .ToArray()
-                        ),
-                        track.Sound.Snapshot()
+            var tracks = new TrackSnapshot[TrackCount];
+
+            for (int track = 0; track < TrackCount; track++)
+            {
+                Track source = _tracks[track];
+                ClipSnapshot[] clips =
+                [
+                    .. _scenes.Select(
+                        scene => new ClipSnapshot(
+                            scene.Id,
+                            Array.AsReadOnly(
+                                source.Clips[scene.Id].Notes
+                                    .Select(note => note.Note)
+                                    .ToArray()
+                            )
+                        )
                     )
-                )
-            ];
-            return new SessionSnapshot(
-                2,
+                ];
+                tracks[track] = new(
+                    source.Name,
+                    source.Instrument,
+                    source.IsMuted,
+                    source.Volume,
+                    [],
+                    source.Sound.Snapshot(),
+                    Array.AsReadOnly(clips)
+                );
+            }
+
+            return new(
+                3,
                 _tempo,
                 LoopBars,
                 _masterVolume,
                 Array.AsReadOnly(tracks),
                 _effects.DelaySnapshot(),
-                _effects.ReverbSnapshot()
+                _effects.ReverbSnapshot(),
+                Array.AsReadOnly(_scenes.ToArray())
             );
         }
     }
@@ -680,6 +710,9 @@ public sealed partial class WorkstationEngine : IDisposable
         {
             ThrowIfDisposed();
             Stop();
+            _scenes.Clear();
+            _scenes.AddRange(session.Scenes!);
+            _editingSceneId = _scenes[0].Id;
             _tempo = session.Tempo;
             _masterVolume = session.MasterVolume;
             _masterGain.SetTarget(_masterVolume, true);
@@ -694,17 +727,30 @@ public sealed partial class WorkstationEngine : IDisposable
                 target.Sound = new(source.Instrument);
                 target.Sound.Apply(source.Sound!, source.Volume);
                 target.IsMuted = source.IsMuted;
+                target.IsSolo = false;
                 target.Volume = source.Volume;
-                target.Notes.Clear();
+                target.EditSceneId = _editingSceneId;
+                target.ActiveSceneId = _editingSceneId;
 
-                foreach (LoopNote note in source.Notes)
+                foreach (Clip clip in target.Clips)
                 {
-                    target.Notes.Add(new StoredNote(NextVoiceId(), note));
+                    clip.Notes.Clear();
+                }
+
+                foreach (ClipSnapshot clip in source.Clips)
+                {
+                    foreach (LoopNote note in clip.Notes)
+                    {
+                        target.Clips[clip.SceneId].Notes.Add(
+                            new StoredNote(NextVoiceId(), note, clip.SceneId)
+                        );
+                    }
                 }
             }
 
             RebuildSchedule();
             _noteRevision++;
+            _launchRevision++;
             _history.Reset();
             _performance.Clear();
             _captureWorkspace?.Clear();
@@ -723,7 +769,15 @@ public sealed partial class WorkstationEngine : IDisposable
 
             _voices.Clear();
             _held.Clear();
-            _schedule.Clear();
+
+            foreach (Track track in _tracks)
+            {
+                foreach (Clip clip in track.Clips)
+                {
+                    clip.Schedule.Clear();
+                }
+            }
+
             _pendingLoopStarts.Clear();
             _history.Reset();
             _performance.Clear();
@@ -890,11 +944,12 @@ public sealed partial class WorkstationEngine : IDisposable
             return;
         }
 
-        double beat = held.QuantizeRecording ? QuantizeOnset(start) : start % LoopBeats;
+        double localStart = start - held.RecordOrigin;
+        double beat = held.QuantizeRecording ? QuantizeOnset(localStart) : WrapClipBeat(localStart);
         duration = held.QuantizeRecording
             ? Math.Clamp(RoundToQuantizationGrid(duration), QuantizeBeats, LoopBeats)
             : Math.Clamp(duration, _tempo / (60 * SampleRate), LoopBeats);
-        Track track = _tracks[held.Track];
+        Clip track = _tracks[held.Track].Clips[held.RecordSceneId];
         StoredNote? replacement = null;
         int replacementIndex = -1;
         bool removedDuplicate = false;
@@ -925,13 +980,19 @@ public sealed partial class WorkstationEngine : IDisposable
 
             else
             {
-                _history.RecordNote(new(held.Track, stored.Id, index, stored.Note, null));
+                _history.RecordNote(
+                    new(held.Track, stored.Id, index, stored.Note, null, held.RecordSceneId)
+                );
                 track.Notes.RemoveAt(index);
                 removedDuplicate = true;
             }
         }
 
-        if (replacement is null && track.Notes.Count >= MaximumNotesPerTrack)
+        if (
+            replacement is null
+                && (track.Notes.Count >= MaximumNotesPerTrack
+                    || TotalNoteCount() >= MaximumProjectNotes)
+        )
         {
             return;
         }
@@ -941,22 +1002,39 @@ public sealed partial class WorkstationEngine : IDisposable
 
         if (replacement is null)
         {
-            replacement = new StoredNote(NextVoiceId(), recorded);
+            replacement = new StoredNote(NextVoiceId(), recorded, held.RecordSceneId);
             track.Notes.Add(replacement);
             _history.RecordNote(
-                new(held.Track, replacement.Id, track.Notes.Count - 1, null, recorded)
+                new(
+                    held.Track,
+                    replacement.Id,
+                    track.Notes.Count - 1,
+                    null,
+                    recorded,
+                    held.RecordSceneId
+                )
             );
         }
 
         else
         {
             _history.RecordNote(
-                new(held.Track, replacement.Id, replacementIndex, replacement.Note, recorded)
+                new(
+                    held.Track,
+                    replacement.Id,
+                    replacementIndex,
+                    replacement.Note,
+                    recorded,
+                    held.RecordSceneId
+                )
             );
             replacement.Note = recorded;
         }
 
-        _pendingLoopStarts[replacement.Id] = (long)Math.Floor(start / LoopBeats) + 1;
+        _pendingLoopStarts[replacement.Id] = new(
+            (long)Math.Floor((localStart + BeatBoundaryTolerance) / LoopBeats) + 1,
+            _tracks[held.Track].Generation
+        );
 
         if (updateSchedule)
         {
@@ -971,121 +1049,95 @@ public sealed partial class WorkstationEngine : IDisposable
 
     private void RebuildSchedule()
     {
-        _schedule.Clear();
-
         for (int track = 0; track < TrackCount; track++)
         {
-            foreach (StoredNote stored in _tracks[track].Notes)
+            foreach (Clip clip in _tracks[track].Clips)
             {
-                LoopNote note = stored.Note;
-                _schedule.Add(
-                    new ScheduledNote(note.Beat, track, stored.Id, note.Note, note.Velocity, true)
-                );
-                _schedule.Add(
-                    new ScheduledNote(
-                        (note.Beat + note.Duration) % LoopBeats,
-                        track,
-                        stored.Id,
-                        note.Note,
-                        0,
-                        false
-                    )
-                );
+                clip.Schedule.Clear();
+
+                foreach (StoredNote stored in clip.Notes)
+                {
+                    AddScheduledPair(clip.Schedule, stored, track);
+                }
+
+                clip.Schedule.Sort(ScheduledNoteComparer.Instance);
+                clip.Cursor = 0;
             }
         }
+    }
 
-        _schedule.Sort(ScheduledNoteComparer.Instance);
-        _scheduleCursor = 0;
+    private void AddScheduledPair(List<ScheduledNote> schedule, StoredNote stored, int track)
+    {
+        LoopNote note = stored.Note;
+        schedule.Add(new(note.Beat, track, stored.Id, note.Note, note.Velocity, true));
+        schedule.Add(
+            new((note.Beat + note.Duration) % LoopBeats, track, stored.Id, note.Note, 0, false)
+        );
     }
 
     private void InsertScheduledNote(StoredNote stored, int track)
     {
+        Clip clip = _tracks[track].Clips[stored.SceneId];
         LoopNote note = stored.Note;
+        InsertScheduled(clip, new(note.Beat, track, stored.Id, note.Note, note.Velocity, true));
         InsertScheduled(
-            new ScheduledNote(note.Beat, track, stored.Id, note.Note, note.Velocity, true)
-        );
-        InsertScheduled(
-            new ScheduledNote(
-                (note.Beat + note.Duration) % LoopBeats,
-                track,
-                stored.Id,
-                note.Note,
-                0,
-                false
-            )
+            clip,
+            new((note.Beat + note.Duration) % LoopBeats, track, stored.Id, note.Note, 0, false)
         );
     }
 
-    private void InsertScheduled(ScheduledNote note)
+    private static void InsertScheduled(Clip clip, ScheduledNote note)
     {
-        int index = _schedule.BinarySearch(note, ScheduledNoteComparer.Instance);
+        int index = clip.Schedule.BinarySearch(note, ScheduledNoteComparer.Instance);
         index = index < 0 ? ~index : index;
-        _schedule.Insert(index, note);
+        clip.Schedule.Insert(index, note);
 
-        if (index < _scheduleCursor)
+        if (index < clip.Cursor)
         {
-            _scheduleCursor++;
+            clip.Cursor++;
         }
     }
 
     private void RemoveScheduledNote(StoredNote stored)
     {
         LoopNote note = stored.Note;
-        RemoveScheduled(new ScheduledNote(note.Beat, 0, stored.Id, 0, 0, true));
-        RemoveScheduled(
-            new ScheduledNote((note.Beat + note.Duration) % LoopBeats, 0, stored.Id, 0, 0, false)
-        );
+
+        foreach (Track track in _tracks)
+        {
+            Clip clip = track.Clips[stored.SceneId];
+            RemoveScheduled(clip, new(note.Beat, 0, stored.Id, 0, 0, true));
+            RemoveScheduled(
+                clip,
+                new((note.Beat + note.Duration) % LoopBeats, 0, stored.Id, 0, 0, false)
+            );
+        }
     }
 
-    private void RemoveScheduled(ScheduledNote note)
+    private static void RemoveScheduled(Clip clip, ScheduledNote note)
     {
-        int index = _schedule.BinarySearch(note, ScheduledNoteComparer.Instance);
+        int index = clip.Schedule.BinarySearch(note, ScheduledNoteComparer.Instance);
 
         if (index >= 0)
         {
-            _schedule.RemoveAt(index);
+            clip.Schedule.RemoveAt(index);
 
-            if (index < _scheduleCursor)
+            if (index < clip.Cursor)
             {
-                _scheduleCursor--;
+                clip.Cursor--;
             }
         }
-    }
-
-    private void RemoveScheduledTrack(int track)
-    {
-        int read = 0;
-        int write = 0;
-        int removedBeforeCursor = 0;
-
-        while (read < _schedule.Count)
-        {
-            ScheduledNote note = _schedule[read];
-
-            if (note.Track != track)
-            {
-                _schedule[write++] = note;
-            }
-
-            else if (read < _scheduleCursor)
-            {
-                removedBeforeCursor++;
-            }
-
-            read++;
-        }
-
-        _schedule.RemoveRange(write, _schedule.Count - write);
-        _scheduleCursor -= removedBeforeCursor;
     }
 
     private void TriggerScheduled(ScheduledNote note)
     {
         if (note.IsOn)
         {
-            if (_pendingLoopStarts.TryGetValue(note.Id, out long firstCycle))
+            if (_pendingLoopStarts.TryGetValue(note.Id, out PendingLoopStart pending))
             {
-                if ((long)Math.Floor(_absoluteBeat / LoopBeats) < firstCycle)
+                if (
+                    pending.Generation == _tracks[note.Track].Generation
+                    && _tracks[note.Track].Cycle < pending.Cycle
+                )
                 {
                     return;
                 }
@@ -1134,6 +1186,21 @@ public sealed partial class WorkstationEngine : IDisposable
         public string ColorHex { get; } = colorHex;
         public bool IsMuted { get; set; }
         public bool Sustain { get; set; }
+        public bool IsSolo { get; set; }
+        public int EditSceneId { get; set; }
+        public int? ActiveSceneId { get; set; } = 0;
+        public double Origin { get; set; }
+        public long Cycle { get; set; } = -1;
+        public long Generation { get; set; }
+        public bool HasQueue { get; set; }
+        public int? QueuedSceneId { get; set; }
+        public double QueueBeat { get; set; }
+        public Clip[] Clips { get; } =
+        [
+            .. Enumerable
+                .Range(0, MaximumScenes)
+                .Select(_ => new Clip())
+        ];
         public TrackSoundState Sound { get; set; } = new(instrument);
 
         public float Volume
@@ -1142,7 +1209,7 @@ public sealed partial class WorkstationEngine : IDisposable
             set => Sound.Level.SetTarget(value, true);
         }
 
-        public List<StoredNote> Notes { get; } = new(MaximumNotesPerTrack);
+        public List<StoredNote> Notes => Clips[EditSceneId].Notes;
     }
 
     private sealed class HeldNote(
@@ -1151,7 +1218,9 @@ public sealed partial class WorkstationEngine : IDisposable
         int note,
         int velocity,
         double? recordStart,
-        bool quantizeRecording
+        bool quantizeRecording,
+        int recordSceneId,
+        double recordOrigin
     )
     {
         public int Id { get; } = id;
@@ -1160,13 +1229,25 @@ public sealed partial class WorkstationEngine : IDisposable
         public int Velocity { get; } = velocity;
         public double? RecordStart { get; set; } = recordStart;
         public bool QuantizeRecording { get; } = quantizeRecording;
+        public int RecordSceneId { get; set; } = recordSceneId;
+        public double RecordOrigin { get; set; } = recordOrigin;
         public bool IsKeyDown { get; set; } = true;
     }
 
-    private sealed class StoredNote(int id, LoopNote note)
+    private sealed class StoredNote(int id, LoopNote note, int sceneId = 0)
     {
         public int Id { get; } = id;
+        public int SceneId { get; } = sceneId;
         public LoopNote Note { get; set; } = note;
+    }
+
+    private readonly record struct PendingLoopStart(long Cycle, long Generation);
+
+    private sealed class Clip
+    {
+        public List<StoredNote> Notes { get; } = [];
+        public List<ScheduledNote> Schedule { get; } = [];
+        public int Cursor { get; set; }
     }
 
     private readonly record struct ScheduledNote(

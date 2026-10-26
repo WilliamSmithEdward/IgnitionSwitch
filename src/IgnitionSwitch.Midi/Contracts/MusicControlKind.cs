@@ -42,5 +42,13 @@ public enum MusicControlKind
     /// <summary>Selects parameter page Index of the current sound device.</summary>
     SelectParameterPage,
     /// <summary>Retains the actual sound device across track selection.</summary>
-    ToggleSoundDeviceLock
+    ToggleSoundDeviceLock,
+    /// <summary>Triggers the session pad at track column Index and visible Row (0 or 1).</summary>
+    TriggerSessionPad,
+    /// <summary>Moves scene selection by Index (-1 or +1).</summary>
+    MoveScene,
+    /// <summary>Launches the selected scene across its tracks.</summary>
+    LaunchSelectedScene,
+    /// <summary>Cycles the app-owned bottom-row context through Clips, Stop, Solo, and Mute.</summary>
+    CycleSessionRowMode
 }

@@ -11,6 +11,8 @@
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.cs" Link="Services/StudioSession.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.Capture.cs" Link="Services/StudioSession.Capture.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.Parameters.cs" Link="Services/StudioSession.Parameters.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.Scenes.cs" Link="Services/StudioSession.Scenes.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/SceneEditorSnapshot.cs" Link="Services/SceneEditorSnapshot.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/SoundControlPage.cs" Link="Services/SoundControlPage.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/AbsoluteKnobPickup.cs" Link="Services/AbsoluteKnobPickup.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/PerformanceInputDiagnostics.cs" Link="Services/PerformanceInputDiagnostics.cs" />

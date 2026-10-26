@@ -146,7 +146,18 @@ public sealed class LaunchkeyController : IMusicController
         }
 
         // Copy caller-owned data before crossing threads or touching hardware.
-        ControllerFeedback snapshot = LaunchkeyFeedbackPresentation.CreateSnapshot(feedback);
+        ControllerFeedback snapshot;
+
+        try
+        {
+            snapshot = LaunchkeyFeedbackPresentation.CreateSnapshot(feedback);
+        }
+
+        catch (ArgumentException)
+        {
+            // A malformed optional Session snapshot must not replace the last valid state.
+            return;
+        }
 
         if (
             snapshot.TrackNames.Count is < 1

@@ -1,6 +1,18 @@
 (string Name, Action Run)[] tests =
 [
     (
+        "Session pads, scenes and context buttons preserve native modes and alias guards",
+        SessionControlMappingTests.Commands
+    ),
+    (
+        "Session feedback reflects clips, queued actions and Stop/Solo/Mute state",
+        SessionFeedbackTests.PadsAndButtons
+    ),
+    (
+        "Session snapshots detach collections and dedupe all visible state",
+        SessionFeedbackTests.SnapshotsAndDedupe
+    ),
+    (
         "Controller snapshots detach all eight knob labels and values",
         FeedbackPresentationTests.Snapshots
     ),

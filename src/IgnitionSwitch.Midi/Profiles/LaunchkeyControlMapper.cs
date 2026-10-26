@@ -60,15 +60,41 @@ public sealed class LaunchkeyControlMapper
             && input.Channel == 0
             && input.Value > 0
             && PadMode == 2
+            && !shiftHeld
         )
         {
             control = input.Number switch
             {
-                >= 96 and <= 99 => new(MusicControlKind.SelectTrack, input.Number - 96),
-                >= 112 and <= 115 => new(MusicControlKind.ToggleTrackMute, input.Number - 112),
+                >= 96 and <= 99 => new(MusicControlKind.TriggerSessionPad, input.Number - 96),
+                >= 112 and <= 115 => new(
+                    MusicControlKind.TriggerSessionPad,
+                    input.Number - 112,
+                    row: 1
+                ),
                 _ => null
             };
             return control is not null;
+        }
+
+        if (
+            input.Kind == MidiInputKind.ControlChange
+            && input.Channel == 0
+            && input.Value > 0
+            && PadMode == 2
+            && !shiftHeld
+        )
+        {
+            control = input.Number switch
+            {
+                LaunchkeyMk3Protocol.SceneLaunch => new(MusicControlKind.LaunchSelectedScene),
+                LaunchkeyMk3Protocol.StopSoloMute => new(MusicControlKind.CycleSessionRowMode),
+                _ => null
+            };
+
+            if (control is not null)
+            {
+                return true;
+            }
         }
 
         if (
@@ -115,6 +141,14 @@ public sealed class LaunchkeyControlMapper
 
         control = input.Number switch
         {
+            LaunchkeyMk3Protocol.SceneUp when PadMode == 2 && !shiftHeld => new(
+                MusicControlKind.MoveScene,
+                -1
+            ),
+            LaunchkeyMk3Protocol.SceneDown when PadMode == 2 && !shiftHeld => new(
+                MusicControlKind.MoveScene,
+                1
+            ),
             106 when PadMode == 9 => new(MusicControlKind.MoveSoundDevice, -1),
             107 when PadMode == 9 => new(MusicControlKind.MoveSoundDevice, 1),
             52 => new(MusicControlKind.ToggleSoundDeviceLock),

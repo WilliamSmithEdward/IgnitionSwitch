@@ -227,6 +227,7 @@
                             </Button>
                             <Button x:Name="RecordButton" Width="124"
                                 Style="{StaticResource ToolbarButtonStyle}"
+                                ToolTipService.ToolTip="Record playing clips"
                                 AutomationProperties.Name="Toggle recording">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <Ellipse Width="8" Height="8" Fill="#F48694" VerticalAlignment="Center" />
@@ -300,19 +301,24 @@
                             </Grid.RowDefinitions>
                             <TextBlock Text="Tracks" Style="{StaticResource PanelHeadingStyle}" />
                             <StackPanel x:Name="TrackPanel" Grid.Row="1" Spacing="4" />
-                            <Grid Grid.Row="2" ColumnSpacing="8">
+                            <Grid Grid.Row="2" ColumnSpacing="6">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="36" />
                                 </Grid.ColumnDefinitions>
-                                <ToggleButton x:Name="MuteButton" Content="Mute" Height="34"
+                                <ToggleButton x:Name="MuteButton" Content="Mute" Height="34" MinWidth="0" Padding="0"
                                     HorizontalAlignment="Stretch" CornerRadius="7"
                                     AutomationProperties.Name="Mute selected track" />
-                                <Button x:Name="ClearButton" Grid.Column="1" Content="Clear"
-                                    Style="{StaticResource QuietButtonStyle}"
-                                    HorizontalAlignment="Stretch"
-                                    ToolTipService.ToolTip="Clear selected track"
-                                    AutomationProperties.Name="Clear selected track" />
+                                <ToggleButton x:Name="SoloButton" Grid.Column="1" Content="Solo" Height="34"
+                                    MinWidth="0" Padding="0" HorizontalAlignment="Stretch" CornerRadius="7"
+                                    AutomationProperties.Name="Solo selected track" />
+                                <Button x:Name="StopClipButton" Grid.Column="2" Width="36" Height="34"
+                                    Style="{StaticResource IconButtonStyle}"
+                                    ToolTipService.ToolTip="Stop selected track clip"
+                                    AutomationProperties.Name="Stop selected track clip">
+                                    <FontIcon Glyph="&#xE71A;" FontSize="12" />
+                                </Button>
                             </Grid>
                         </Grid>
                     </Border>
@@ -343,29 +349,43 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Loop" Style="{StaticResource PanelHeadingStyle}"
                                         VerticalAlignment="Center" />
                                     <TextBlock x:Name="LoopLengthText" Grid.Column="1" Text="4 bars"
                                         Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="SelectedTrackText" Grid.Column="2" Text="Velvet keys"
-                                        FontSize="12" Foreground="{StaticResource MutedText}"
-                                        VerticalAlignment="Center" TextAlignment="Right"
-                                        TextTrimming="CharacterEllipsis" />
-                                    <Button x:Name="LoopOptionsButton" Grid.Column="3"
+                                    <ComboBox x:Name="SceneSelector" Grid.Column="2" MinWidth="0" Height="34"
+                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                        ToolTipService.ToolTip="Scene to edit"
+                                        AutomationProperties.Name="Scene to edit" />
+                                    <Button x:Name="LaunchSceneButton" Grid.Column="3" Content="Launch"
+                                        Style="{StaticResource QuietButtonStyle}" Padding="10,0"
+                                        ToolTipService.ToolTip="Launch this scene at the next bar, or immediately when stopped"
+                                        AutomationProperties.Name="Launch selected scene" />
+                                    <Button x:Name="LoopOptionsButton" Grid.Column="4"
                                         Style="{StaticResource IconButtonStyle}"
                                         ToolTipService.ToolTip="Loop options"
                                         AutomationProperties.Name="Loop options">
                                         <FontIcon Glyph="&#xE712;" FontSize="16" />
                                         <Button.Flyout>
                                             <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                <MenuFlyoutSubItem Text="Scene">
+                                                    <MenuFlyoutItem x:Name="NewSceneItem" Text="New scene" />
+                                                    <MenuFlyoutItem x:Name="DuplicateSceneItem" Text="Duplicate scene" />
+                                                    <MenuFlyoutItem x:Name="RenameSceneItem" Text="Rename scene" />
+                                                    <MenuFlyoutItem x:Name="DeleteSceneItem" Text="Delete scene" />
+                                                </MenuFlyoutSubItem>
+                                                <MenuFlyoutItem x:Name="ClearClipItem" Text="Clear selected clip"
+                                                    AutomationProperties.Name="Clear selected clip" />
+                                                <MenuFlyoutSeparator />
                                                 <ToggleMenuFlyoutItem x:Name="RepeatLoopItem"
                                                     Text="Repeat loop" IsChecked="True"
                                                     AutomationProperties.Name="Repeat loop" />
                                                 <MenuFlyoutSeparator />
                                                 <MenuFlyoutItem x:Name="QuantizeTrackItem"
-                                                    Text="Quantise selected track"
-                                                    AutomationProperties.Name="Quantise selected track to the 1/16 note grid" />
+                                                    Text="Quantise selected clip"
+                                                    AutomationProperties.Name="Quantise selected clip to the 1/16 note grid" />
                                                 <MenuFlyoutItem x:Name="CaptureRecentItem"
                                                     Text="Capture recent playing"
                                                     AutomationProperties.Name="Capture recent playing into the loop" />

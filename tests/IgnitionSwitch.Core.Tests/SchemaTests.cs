@@ -42,11 +42,11 @@ internal static class SchemaTests
             await File.WriteAllTextAsync(path, legacy);
             SessionSnapshot migrated = await SessionStore.LoadAsync(path);
             Check.That(
-                migrated.Version == 2
+                migrated.Version == 3
                     && migrated.Delay is not null
                     && migrated.Reverb is not null
                     && migrated.Tracks.All(track => track.Sound is not null),
-                "Version one input must migrate to complete canonical version two settings."
+                "Version one input must migrate to complete canonical version three settings."
             );
             Check.That(
                 migrated.Tracks.All(
@@ -83,8 +83,8 @@ internal static class SchemaTests
                 JsonNode
                     .Parse(await File.ReadAllTextAsync(path))!["version"]!
                     .GetValue<int>()
-                    == 2,
-                "Saving migrated input must write version two."
+                    == 3,
+                "Saving migrated input must write version three."
             );
 
             foreach (string field in new[] { "delay", "reverb" })

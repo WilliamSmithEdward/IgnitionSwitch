@@ -19,17 +19,10 @@ internal sealed class LoopTimeline
     private readonly List<LaneVisual> lanes = [];
     private readonly List<Border> beatLines = [];
     private readonly List<TextBlock> barLabels = [];
-    private readonly Border playhead = new()
-    {
-        Width = 2,
-        Background = InstrumentControls.Brush("#FFB05C"),
-        IsHitTestVisible = false
-    };
     private readonly HashSet<LoopNote> seenNotes = [];
     private readonly List<LoopNote> removedNotes = [];
     private IReadOnlyList<TrackState> tracks = [];
     private double beats = 16;
-    private double position;
     private double width;
     private double height;
     private int selectedTrack;
@@ -43,14 +36,19 @@ internal sealed class LoopTimeline
         host.SizeChanged += (_, _) => Arrange();
     }
 
-    public void Render(SessionSnapshot session, IReadOnlyList<TrackState> trackStates, int selected)
+    public void Render(
+        int loopBars,
+        IReadOnlyList<IReadOnlyList<LoopNote>> notes,
+        IReadOnlyList<TrackState> trackStates,
+        int selected
+    )
     {
-        double newBeats = session.LoopBars * 4;
+        double newBeats = loopBars * 4;
 
-        if (lanes.Count != session.Tracks.Count || beats != newBeats)
+        if (lanes.Count != notes.Count || beats != newBeats)
         {
             beats = newBeats;
-            CreateVisuals(session.Tracks.Count);
+            CreateVisuals(notes.Count);
         }
 
         UpdateTracks(trackStates, selected);
@@ -60,7 +58,7 @@ internal sealed class LoopTimeline
             LaneVisual lane = lanes[index];
             seenNotes.Clear();
 
-            foreach (LoopNote note in session.Tracks[index].Notes)
+            foreach (LoopNote note in notes[index])
             {
                 _ = seenNotes.Add(note);
 
@@ -120,11 +118,23 @@ internal sealed class LoopTimeline
         }
     }
 
-    public void UpdatePosition(double beat, bool playing)
+    public void UpdatePlayback(
+        ReadOnlySpan<TrackPlaybackState> states,
+        int editingScene,
+        bool playing
+    )
     {
-        position = beat;
-        ArrangePlayhead();
-        playhead.Opacity = playing ? 1 : 0.45;
+        for (int index = 0; index < lanes.Count; index++)
+        {
+            LaneVisual lane = lanes[index];
+            TrackPlaybackState state = states[index];
+            lane.Position = state.LocalBeat;
+            lane.Playhead.Visibility = state.ActiveSceneId == editingScene
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            lane.Playhead.Opacity = playing ? 1 : 0.45;
+            ArrangePlayhead(lane);
+        }
     }
 
     private void CreateVisuals(int count)
@@ -171,9 +181,9 @@ internal sealed class LoopTimeline
         foreach (LaneVisual lane in lanes)
         {
             canvas.Children.Add(lane.Path);
+            canvas.Children.Add(lane.Playhead);
         }
 
-        canvas.Children.Add(playhead);
         Arrange();
     }
 
@@ -197,6 +207,9 @@ internal sealed class LoopTimeline
             lane.Button.Width = width;
             lane.Button.Height = Math.Max(1, laneHeight - 2);
             Canvas.SetTop(lane.Button, RulerHeight + (index * laneHeight));
+            lane.Playhead.Height = Math.Max(1, laneHeight - 2);
+            Canvas.SetTop(lane.Playhead, RulerHeight + (index * laneHeight));
+            ArrangePlayhead(lane);
 
             foreach ((LoopNote note, NoteVisual visual) in lane.Notes)
             {
@@ -216,17 +229,13 @@ internal sealed class LoopTimeline
         {
             Canvas.SetLeft(barLabels[bar], LabelWidth + (bar * 4 / beats * gridWidth) + 6);
         }
-
-        playhead.Height = height - RulerHeight;
-        Canvas.SetTop(playhead, RulerHeight);
-        ArrangePlayhead();
     }
 
-    private void ArrangePlayhead()
+    private void ArrangePlayhead(LaneVisual lane)
     {
         double gridWidth = Math.Max(0, width - LabelWidth);
-        double left = LabelWidth + (Math.Clamp(position, 0, beats) / beats * gridWidth);
-        Canvas.SetLeft(playhead, Math.Min(Math.Max(0, width - playhead.Width), left));
+        double left = LabelWidth + (Math.Clamp(lane.Position, 0, beats) / beats * gridWidth);
+        Canvas.SetLeft(lane.Playhead, Math.Min(Math.Max(0, width - lane.Playhead.Width), left));
     }
 
     private void ArrangeNote(int index, LoopNote note, NoteVisual visual)
@@ -280,5 +289,13 @@ internal sealed class LoopTimeline
         public GeometryGroup Geometry { get; } = new() { FillRule = FillRule.Nonzero };
         public Microsoft.UI.Xaml.Shapes.Path Path { get; } = new() { IsHitTestVisible = false };
         public Dictionary<LoopNote, NoteVisual> Notes { get; } = [];
+        public double Position { get; set; }
+        public Border Playhead { get; } = new()
+        {
+            Width = 2,
+            Background = InstrumentControls.Brush("#FFB05C"),
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed
+        };
     }
 }

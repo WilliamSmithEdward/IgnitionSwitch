@@ -13,12 +13,18 @@ namespace IgnitionSwitch.Midi.Devices;
 internal sealed class ControllerSession : IDisposable
 {
     private const int PadFeedbackIntervalMilliseconds = 8;
+    private static readonly int[] SessionButtons = [
+        LaunchkeyMk3Protocol.SceneLaunch, LaunchkeyMk3Protocol.StopSoloMute,
+        LaunchkeyMk3Protocol.SceneUp, LaunchkeyMk3Protocol.SceneDown
+    ];
     private readonly Lock portLock = new();
     private readonly Lock mappingLock = new();
     private readonly Lock activityLock = new();
     private readonly CancellationTokenSource cancellation = new();
     private readonly PadHitState padHits = new(LaunchkeyMk3Profile.Model37.DrumPadLayout);
     private readonly int[] lastPadColors = new int[16];
+    private readonly LaunchkeyLedFeedback[] lastSessionPads = new LaunchkeyLedFeedback[16];
+    private readonly LaunchkeyLedFeedback[] lastSessionButtons = new LaunchkeyLedFeedback[4];
     private readonly string?[] lastDisplayRows = new string?[2];
     private readonly Timer activityTimer;
     private readonly Action<ControllerSession> feedbackFailed;
@@ -38,6 +44,7 @@ internal sealed class ControllerSession : IDisposable
     private bool activityPumpRunning;
     private bool activityDirty;
     private bool modeFeedbackRequested;
+    private bool sessionLightsValid;
     private int padMode = 2;
     private readonly LaunchkeyControlMapper mapper = new();
     private readonly LaunchkeyPerformanceRouter performanceRouter = new();
@@ -221,28 +228,9 @@ internal sealed class ControllerSession : IDisposable
         int mode = Volatile.Read(ref padMode);
         bool sameTracks = LaunchkeyFeedbackPresentation.HasSameTrackState(previous, feedback);
 
-        if (mode == 2 && !sameTracks)
+        if (mode == 2)
         {
-            for (int pad = 0; pad < 16; pad++)
-            {
-                if (Volatile.Read(ref padMode) != mode)
-                {
-                    break;
-                }
-
-                int track = pad % 8;
-                bool present = track < feedback.TrackNames.Count;
-                int color = !present
-                    ? 0
-                    : track == feedback.SelectedTrack ? feedback.Recording ? 5 : 45 : 13;
-
-                if (pad >= 8)
-                {
-                    color = !present ? 0 : feedback.TrackMuted[track] ? 5 : 19;
-                }
-
-                SendDaw(LaunchkeyMk3Protocol.SetSessionPad(pad, color));
-            }
+            PaintSession(feedback);
         }
 
         else if (mode == 1 && !sameTracks)
@@ -289,12 +277,47 @@ internal sealed class ControllerSession : IDisposable
             }
         }
 
-        string title = mode == 9 && !string.IsNullOrEmpty(feedback.DeviceName)
-            ? feedback.DeviceName
-            : feedback.TrackNames[feedback.SelectedTrack];
-        PaintDisplayRow(0, title);
-        PaintDisplayRow(1, LaunchkeyFeedbackPresentation.TransportText(feedback));
+        PaintDisplayRow(0, LaunchkeySessionPresentation.DisplayTitle(feedback, mode));
+        PaintDisplayRow(1, LaunchkeySessionPresentation.DisplayDetail(feedback, mode));
         previousFeedback = feedback;
+    }
+
+    private void PaintSession(ControllerFeedback feedback)
+    {
+        for (int pad = 0; pad < lastSessionPads.Length; pad++)
+        {
+            if (Volatile.Read(ref padMode) != 2)
+            {
+                return;
+            }
+
+            LaunchkeyLedFeedback light = LaunchkeySessionPresentation.Pad(feedback, pad);
+
+            if (!sessionLightsValid || light != lastSessionPads[pad])
+            {
+                SendDaw(LaunchkeyMk3Protocol.SetSessionPad(pad, light));
+                lastSessionPads[pad] = light;
+            }
+        }
+
+        for (int index = 0; index < SessionButtons.Length; index++)
+        {
+            if (Volatile.Read(ref padMode) != 2)
+            {
+                return;
+            }
+
+            int controller = SessionButtons[index];
+            LaunchkeyLedFeedback light = LaunchkeySessionPresentation.Button(feedback, controller);
+
+            if (!sessionLightsValid || light != lastSessionButtons[index])
+            {
+                SendDaw(LaunchkeyMk3Protocol.SetRgbControl(controller, light));
+                lastSessionButtons[index] = light;
+            }
+        }
+
+        sessionLightsValid = true;
     }
 
     private void PaintDisplayRow(int row, string text)
@@ -465,6 +488,7 @@ internal sealed class ControllerSession : IDisposable
                     {
                         previousFeedback = null;
                         Array.Fill(lastDisplayRows, null);
+                        sessionLightsValid = false;
                     }
 
                     if (target is not null)

@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private bool devicesFlyoutOpen;
     private PerformanceInputDiagnostics.Snapshot? displayedInputDiagnostics;
     private long timelineRevision = -1;
+    private int timelineSceneId = -1;
     private long lastStateRefresh;
     private double minimumWindowScale;
     private int mixerRefreshRequested;
@@ -112,7 +113,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 RefreshVolumes(session.Engine.Tracks);
             }
 
-            timeline.UpdatePosition(session.Engine.BeatPosition, session.Engine.IsPlaying);
+            UpdateClipPlayheads();
 
             if (
                 Interlocked.Exchange(ref stateRefreshRequested, 0) != 0
@@ -201,7 +202,7 @@ public sealed partial class MainWindow : Window, IDisposable
             };
             trackControls.Add(controls);
             var panel = new StackPanel { Spacing = 0 };
-            panel.Children.Add(controls.Button);
+            panel.Children.Add(CreateTrackSurface(controls, trackIndex));
             panel.Children.Add(controls.Volume);
             TrackPanel.Children.Add(panel);
         }
@@ -358,7 +359,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 RefreshState();
             }
         };
-        ClearButton.Click += async (_, _) => await ClearTrackAsync();
+        WireSceneControls();
         SaveButton.Click += async (_, _) => await SaveAsync();
         OpenButton.Click += async (_, _) => await OpenAsync();
         AddShortcut(VirtualKey.Space, session.TogglePlayback);
@@ -541,6 +542,11 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void RefreshState()
     {
+        if (disposed)
+        {
+            return;
+        }
+
         lastStateRefresh = Environment.TickCount64;
         updating = true;
         session.Audio.EnsureRunning();
@@ -585,10 +591,9 @@ public sealed partial class MainWindow : Window, IDisposable
         CaptureRecentItem.IsEnabled = session.CanCaptureRecentPerformance;
         RecordingGridItem.IsChecked = session.RecordingQuantizationEnabled;
         RecordingGridItem.IsEnabled = !session.IsInteractionBlocked;
-        SelectedTrackText.Text = tracks[engine.SelectedTrack].Name;
         double beatPosition = engine.BeatPosition;
         LoopProgress.Value = beatPosition;
-        timeline.UpdatePosition(beatPosition, engine.IsPlaying);
+        UpdateClipPlayheads();
         PositionText.Text = beatPosition >= engine.LoopBeats
             ? "End"
             : $"Bar {(int)(beatPosition / 4) + 1} · beat {(int)(beatPosition % 4) + 1}";
@@ -606,8 +611,6 @@ public sealed partial class MainWindow : Window, IDisposable
                 controls.Volume,
                 $"{track.Name} volume"
             );
-            controls.Detail.Text =
-                $"{track.NoteCount} {(track.NoteCount == 1 ? "note" : "notes")}{(track.IsMuted ? " · muted" : string.Empty)}";
             controls.Button.BorderBrush = InstrumentControls.Brush(
                 index == engine.SelectedTrack ? track.ColorHex : "#30394A"
             );
@@ -615,9 +618,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
         Title = session.HasChanges ? "IgnitionSwitch · Unsaved session" : "IgnitionSwitch";
 
-        if (timelineRevision != engine.NoteRevision)
+        RefreshSceneControls(tracks);
+
+        if (timelineRevision != engine.NoteRevision || timelineSceneId != engine.EditingSceneId)
         {
-            timelineRevision = engine.NoteRevision;
             DrawTimeline();
         }
 
@@ -706,33 +710,11 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void DrawTimeline()
     {
-        timeline.Render(
-            session.Engine.CaptureSession(),
-            session.Engine.Tracks,
-            session.Engine.SelectedTrack
-        );
-    }
-
-    private async Task ClearTrackAsync()
-    {
-        int selectedTrack = session.Engine.SelectedTrack;
-
-        if (
-            session.Engine.Tracks[selectedTrack].NoteCount == 0
-            || await ConfirmAsync(
-                "Clear this track?",
-                "This removes the recorded notes on the selected track.",
-                "Clear track"
-            )
-        )
-        {
-            session.SelectTrack(selectedTrack);
-            session.Engine.ClearSelectedTrack();
-            session.MarkChanged();
-            timelineRevision = -1;
-            StatusText.Text = "Track cleared.";
-            RefreshState();
-        }
+        SceneEditorSnapshot editor = session.CaptureSceneEditor();
+        timelineRevision = editor.NoteRevision;
+        timelineSceneId = editor.SceneId;
+        timeline.Render(editor.LoopBars, editor.Notes, editor.Tracks, session.Engine.SelectedTrack);
+        UpdateClipPlayheads();
     }
 
     private async Task<bool> SaveAsync()
@@ -897,6 +879,11 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         args.Cancel = true;
+
+        if (dialogOpen || disposed)
+        {
+            return;
+        }
 
         if (
             session.HasChanges

@@ -71,7 +71,7 @@ public sealed partial class WorkstationEngine
         return (Math.Floor(cycle) + 1) * LoopBeats;
     }
 
-    private void StartPlayback()
+    private void StartPlayback(bool prepareEditingRow = true)
     {
         if (!_isPlaying)
         {
@@ -88,14 +88,48 @@ public sealed partial class WorkstationEngine
             _finishAtBeat = NextLoopEnd();
         }
 
+        if (!_isPlaying && !_resumeExistingMix)
+        {
+            if (prepareEditingRow)
+            {
+                PrepareEditingRow();
+            }
+
+            else
+            {
+                Span<ClipAction> actions = stackalloc ClipAction[TrackCount];
+
+                for (int track = 0; track < TrackCount; track++)
+                {
+                    actions[track] = new(track, null, _absoluteBeat);
+                }
+
+                ApplyClipActions(actions);
+            }
+        }
+
         _isPlaying = true;
+        _resumeExistingMix = false;
     }
 
     private void ResetPlaybackPosition()
     {
         _performance.MarkDiscontinuity();
         _absoluteBeat = 0;
-        _scheduleCursor = 0;
+        ClearLaunchQueues();
+        _resumeExistingMix = false;
+
+        foreach (Track track in _tracks)
+        {
+            track.Origin = 0;
+            track.Cycle = -1;
+
+            foreach (Clip clip in track.Clips)
+            {
+                clip.Cursor = 0;
+            }
+        }
+
         _pendingLoopStarts.Clear();
         _lastClickBeat = -1;
         _clickSamples = 0;
@@ -108,6 +142,7 @@ public sealed partial class WorkstationEngine
         _performance.MarkDiscontinuity();
         _ = EndRecordingCore();
         _history.Commit();
+        _resumeExistingMix |= _isPlaying;
         _isPlaying = false;
         _clickSamples = 0;
         _ = _voices.RemoveAll(static voice => voice.IsLoop);

@@ -28,7 +28,7 @@ public sealed partial class WorkstationEngine
         }
     }
 
-    /// <summary>Ends recording and snaps the selected track's note onsets to sixteenths, preserving durations. Returns whether the quantization changed content.</summary>
+    /// <summary>Ends recording and snaps the selected track clip's note onsets in the editing scene to sixteenths, preserving durations. Returns whether the quantization changed content.</summary>
     /// <remarks>
     /// Midpoint onsets move forward and the loop end wraps to zero. The last stored note wins a
     /// same-pitch collision. Changes form one undo step; live voices, transport, and pending-loop
@@ -63,13 +63,17 @@ public sealed partial class WorkstationEngine
                 if (survives)
                 {
                     LoopNote quantized = original with { Beat = beat };
-                    _history.RecordNote(new(_selectedTrack, stored.Id, index, original, quantized));
+                    _history.RecordNote(
+                        new(_selectedTrack, stored.Id, index, original, quantized, _editingSceneId)
+                    );
                     stored.Note = quantized;
                 }
 
                 else
                 {
-                    _history.RecordNote(new(_selectedTrack, stored.Id, index, original, null));
+                    _history.RecordNote(
+                        new(_selectedTrack, stored.Id, index, original, null, _editingSceneId)
+                    );
                     _ = _pendingLoopStarts.Remove(stored.Id);
                     track.Notes.RemoveAt(index);
                 }
@@ -87,6 +91,18 @@ public sealed partial class WorkstationEngine
 
             return changed;
         }
+    }
+
+    private double WrapClipBeat(double beat)
+    {
+        beat %= LoopBeats;
+
+        if (beat < 0)
+        {
+            beat += LoopBeats;
+        }
+
+        return beat < BeatBoundaryTolerance || LoopBeats - beat < BeatBoundaryTolerance ? 0 : beat;
     }
 
     private double QuantizeOnset(double beat)

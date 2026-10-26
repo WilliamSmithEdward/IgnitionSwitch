@@ -3,6 +3,18 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Scene editing, copies, exact clearing and structural history retain all rows",
+        SceneCommandTests.EditingAndHistory
+    ),
+    (
+        "Queued scene launches and lane stops preserve live ownership and saved revisions",
+        SceneCommandTests.LaunchesAndOwnership
+    ),
+    (
+        "Session context modes and scene controls honor modal, offline and shutdown guards",
+        SceneCommandTests.SurfaceAndModalGuards
+    ),
+    (
         "Exclusive buffer requests validate and round the driver's minimum period",
         ExclusiveAudioBufferTests.MinimumPeriod
     ),

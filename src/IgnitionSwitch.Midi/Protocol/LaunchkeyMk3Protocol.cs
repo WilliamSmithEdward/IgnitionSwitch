@@ -51,6 +51,18 @@ public static class LaunchkeyMk3Protocol
     /// <summary>First of eight consecutive pot CC numbers.</summary>
     public const int FirstKnobController = 21;
 
+    /// <summary>Scene Launch button CC on zero-based channel 0.</summary>
+    public const int SceneLaunch = 104;
+
+    /// <summary>Stop/Solo/Mute button CC on zero-based channel 0.</summary>
+    public const int StopSoloMute = 105;
+
+    /// <summary>Canonical scene-up button CC on the control channel; its legacy CC104 alias is ignored.</summary>
+    public const int SceneUp = 106;
+
+    /// <summary>Canonical scene-down button CC on the control channel; its legacy CC105 alias is ignored.</summary>
+    public const int SceneDown = 107;
+
     /// <summary>A universal, manufacturer-independent device inquiry.</summary>
     public static byte[] IdentityInquiry()
     {
@@ -150,16 +162,29 @@ public static class LaunchkeyMk3Protocol
     /// <summary>Session pad index is row-major: 0–7 at top, 8–15 at bottom. Color is a palette index.</summary>
     public static byte[] SetSessionPad(int pad, int color, bool pulse = false)
     {
+        return SetSessionPad(
+            pad,
+            new LaunchkeyLedFeedback(
+                color,
+                pulse ? LaunchkeyLedMode.Pulsing : LaunchkeyLedMode.Steady
+            )
+        );
+    }
+
+    /// <summary>Sets a Session pad's palette color and steady, flashing, or pulsing state.</summary>
+    public static byte[] SetSessionPad(int pad, LaunchkeyLedFeedback light)
+    {
         ArgumentOutOfRangeException.ThrowIfNegative(pad);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(pad, 15);
-        ArgumentOutOfRangeException.ThrowIfNegative(color);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(color, 127);
-        return
-        [
-            pulse ? (byte)0x92 : (byte)0x90,
-            (byte)(pad < 8 ? 96 + pad : 112 + pad - 8),
-            (byte)color
-        ];
+        return PaletteMessage(0x90, pad < 8 ? 96 + pad : 112 + pad - 8, light);
+    }
+
+    /// <summary>Sets an RGB CC-associated control's palette color; includes Scene Launch, mode, and navigation buttons.</summary>
+    public static byte[] SetRgbControl(int controller, LaunchkeyLedFeedback light)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(controller);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(controller, 127);
+        return PaletteMessage(0xB0, controller, light);
     }
 
     /// <summary>Colors a Drum-layout MIDI note from 36–51 using the MK3 palette on its DAW output.</summary>
@@ -208,6 +233,19 @@ public static class LaunchkeyMk3Protocol
         ArgumentOutOfRangeException.ThrowIfNegative(knob);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(knob, 7);
         return DisplayMessage(command, (byte)(0x38 + knob), text);
+    }
+
+    private static byte[] PaletteMessage(byte status, int number, LaunchkeyLedFeedback light)
+    {
+        return light.Color is < 0
+            or > 127 || !Enum.IsDefined(light.Mode)
+                ? throw new ArgumentOutOfRangeException(nameof(light))
+                :
+                [
+                    (byte)(status + (int)light.Mode),
+                    (byte)number,
+                    (byte)light.Color
+                ];
     }
 
     private static byte[] DisplayMessage(byte command, byte index, string text)

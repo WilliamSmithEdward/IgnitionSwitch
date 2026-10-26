@@ -89,6 +89,12 @@ public sealed partial class WorkstationEngine
 
     private void ApplyHistoryEdit(SessionEdit edit, bool reverse)
     {
+        if (edit.Scene is SceneEdit scene)
+        {
+            ApplySceneEdit(scene, reverse);
+            return;
+        }
+
         if (!edit.IsNoteEdit)
         {
             ScalarEdit scalar = edit.Scalar;
@@ -117,31 +123,34 @@ public sealed partial class WorkstationEngine
 
     private void AlignHistorySchedule()
     {
-        double position = _absoluteBeat % LoopBeats;
-        int first = 0;
-        int last = _schedule.Count;
-
-        while (first < last)
+        foreach (Track track in _tracks)
         {
-            int middle = first + ((last - first) / 2);
-
-            if (_schedule[middle].Beat < position - 1e-9)
+            if (track.ActiveSceneId is not int sceneId)
             {
-                first = middle + 1;
+                continue;
             }
 
-            else
+            Clip clip = track.Clips[sceneId];
+            double position = WrapClipBeat(_absoluteBeat - track.Origin);
+            clip.Cursor = 0;
+
+            while (
+                clip.Cursor < clip.Schedule.Count
+                && clip.Schedule[clip.Cursor].Beat < position - BeatBoundaryTolerance
+            )
             {
-                last = middle;
+                clip.Cursor++;
             }
+
+            track.Cycle = (long)Math.Floor(
+                (_absoluteBeat - track.Origin + BeatBoundaryTolerance) / LoopBeats
+            );
         }
-
-        _scheduleCursor = first;
     }
 
     private void ApplyHistoryNote(NoteEdit edit, bool reverse, bool removeLoopVoices = true)
     {
-        Track track = _tracks[edit.Track];
+        Clip track = _tracks[edit.Track].Clips[edit.SceneId];
         LoopNote? target = reverse ? edit.Before : edit.After;
         int index = edit.Index < track.Notes.Count && track.Notes[edit.Index].Id == edit.Id
             ? edit.Index
@@ -180,7 +189,7 @@ public sealed partial class WorkstationEngine
 
         else if (target is not null)
         {
-            var stored = new StoredNote(edit.Id, target);
+            var stored = new StoredNote(edit.Id, target, edit.SceneId);
             track.Notes.Insert(Math.Min(edit.Index, track.Notes.Count), stored);
         }
     }

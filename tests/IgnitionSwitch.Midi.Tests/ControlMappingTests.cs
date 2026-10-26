@@ -37,13 +37,13 @@ internal static class ControlMappingTests
         );
         Check.That(
             mapper.TryMap(new(MidiInputKind.NoteOn, 0, 99, 127, false), out command)
-                && command is { Kind: MusicControlKind.SelectTrack, Index: 3 },
-            "Session selection pad did not map."
+                && command is { Kind: MusicControlKind.TriggerSessionPad, Index: 3, Row: 0 },
+            "Upper Session clip pad did not map."
         );
         Check.That(
             mapper.TryMap(new(MidiInputKind.NoteOn, 0, 112, 127, false), out command)
-                && command is { Kind: MusicControlKind.ToggleTrackMute, Index: 0 },
-            "Mute pad did not map."
+                && command is { Kind: MusicControlKind.TriggerSessionPad, Index: 0, Row: 1 },
+            "Lower Session pad must retain its row for application-owned context."
         );
         Check.That(
             !mapper.TryMap(new(MidiInputKind.NoteOn, 9, 96, 127, false), out _),

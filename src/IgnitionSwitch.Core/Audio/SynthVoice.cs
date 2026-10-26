@@ -29,6 +29,7 @@ internal sealed class SynthVoice(
     private double _releaseLength = instrument == InstrumentKind.Drums ? 0.12 : releasePhysical;
     private double _drumTail = instrument == InstrumentKind.Drums ? releasePhysical : 1;
     private float _toneLow;
+    private int _clipFadeFrames = -1;
 
     public int Id { get; } = id;
     public int Track { get; } = track;
@@ -54,6 +55,14 @@ internal sealed class SynthVoice(
         _releaseLevel = Envelope();
         _releaseAge = _age;
         _releasePending = false;
+    }
+
+    public void BeginClipFade()
+    {
+        if (_clipFadeFrames < 0)
+        {
+            _clipFadeFrames = WorkstationEngine.SampleRate / 200;
+        }
     }
 
     public float Render(double pitchRatio, float tone, float drive, double drumTail)
@@ -129,6 +138,16 @@ internal sealed class SynthVoice(
         {
             double driven = wave * (1 + (drive * 12));
             wave += drive * ((driven / (1 + Math.Abs(driven))) - wave);
+        }
+
+        if (_clipFadeFrames >= 0)
+        {
+            envelope *= (float)_clipFadeFrames / (WorkstationEngine.SampleRate / 200);
+
+            if (--_clipFadeFrames <= 0)
+            {
+                IsFinished = true;
+            }
         }
 
         _age++;

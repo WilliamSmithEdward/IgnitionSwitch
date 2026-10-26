@@ -23,6 +23,21 @@ public static class LaunchkeyFeedbackPresentation
         ArgumentNullException.ThrowIfNull(feedback);
         ArgumentNullException.ThrowIfNull(feedback.TrackNames);
         ArgumentNullException.ThrowIfNull(feedback.TrackMuted);
+
+        if (
+            feedback.TrackNames.Count is < 1
+                or > 8
+                    || feedback.TrackMuted.Count != feedback.TrackNames.Count
+                    || feedback.SelectedTrack < 0
+                    || feedback.SelectedTrack >= feedback.TrackNames.Count
+        )
+        {
+            throw new ArgumentException(
+                "Feedback requires one to eight matching tracks and a valid selection.",
+                nameof(feedback)
+            );
+        }
+
         string[] names = [.. feedback.TrackNames.Select(name => name ?? string.Empty)];
         bool[] muted = [.. feedback.TrackMuted];
         var knobs = new ControllerKnobFeedback[8];
@@ -38,7 +53,49 @@ public static class LaunchkeyFeedbackPresentation
             TrackNames = Array.AsReadOnly(names),
             TrackMuted = Array.AsReadOnly(muted),
             Knobs = Array.AsReadOnly(knobs),
-            DeviceName = feedback.DeviceName ?? string.Empty
+            DeviceName = feedback.DeviceName ?? string.Empty,
+            Session = CopySession(feedback.Session, names.Length)
+        };
+    }
+
+    private static ControllerSessionFeedback? CopySession(
+        ControllerSessionFeedback? session,
+        int trackCount
+    )
+    {
+        if (session is null)
+        {
+            return null;
+        }
+
+        if (!session.HasMatchingTracks(trackCount))
+        {
+            throw new ArgumentException(
+                "Session feedback collections must match the track count and use a supported row mode.",
+                nameof(session)
+            );
+        }
+
+        ControllerClipFeedback[] upper = [.. session.UpperClips];
+        ControllerClipFeedback[] lower = [.. session.LowerClips];
+        bool[] solo = [.. session.TrackSolo];
+        bool[] active = new bool[trackCount];
+        bool[] stopQueued = new bool[trackCount];
+
+        for (int track = 0; track < trackCount; track++)
+        {
+            active[track] = session.IsTrackActive(track);
+            stopQueued[track] = session.IsTrackStopQueued(track);
+        }
+
+        return session with
+        {
+            SceneName = session.SceneName ?? string.Empty,
+            UpperClips = Array.AsReadOnly(upper),
+            LowerClips = Array.AsReadOnly(lower),
+            TrackSolo = Array.AsReadOnly(solo),
+            TrackActive = Array.AsReadOnly(active),
+            TrackStopQueued = Array.AsReadOnly(stopQueued)
         };
     }
 
@@ -82,6 +139,7 @@ public static class LaunchkeyFeedbackPresentation
             || previous.LoopEnabled != current.LoopEnabled
             || (previous.DeviceName ?? string.Empty) != (current.DeviceName ?? string.Empty)
             || previous.DeviceLocked != current.DeviceLocked
+            || !ControllerSessionFeedback.HasSameState(previous.Session, current.Session)
         )
         {
             return false;

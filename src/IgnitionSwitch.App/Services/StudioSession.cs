@@ -283,6 +283,7 @@ internal sealed partial class StudioSession : IDisposable
             Engine.ApplySession(snapshot);
             soundDevice = SoundDeviceKind.Instrument;
             soundDeviceLocked = false;
+            sessionRowMode = SessionRowMode.Clips;
             knobPickup.Reset();
             ClearPerformanceState();
             revision++;
@@ -467,7 +468,8 @@ internal sealed partial class StudioSession : IDisposable
                         tracks[soundDeviceLocked ? lockedSoundTrack : Engine.SelectedTrack].Name,
                     _ => tracks[soundDeviceLocked ? lockedSoundTrack : Engine.SelectedTrack].Name
                 },
-                soundDeviceLocked
+                soundDeviceLocked,
+                CreateSessionFeedback()
             );
 
             if (
@@ -478,6 +480,7 @@ internal sealed partial class StudioSession : IDisposable
                 && previous.LoopEnabled == feedback.LoopEnabled
                 && previous.DeviceName == feedback.DeviceName
                 && previous.DeviceLocked == feedback.DeviceLocked
+                && ControllerSessionFeedback.HasSameState(previous.Session, feedback.Session)
                 && previous.Knobs is not null
                     && previous.Knobs.SequenceEqual(feedback.Knobs!)
                     && previous.TrackNames.SequenceEqual(feedback.TrackNames)
@@ -690,6 +693,26 @@ internal sealed partial class StudioSession : IDisposable
     {
         switch (control.Kind)
         {
+            case MusicControlKind.TriggerSessionPad:
+                TriggerSessionPadCore(control.Index, control.Row);
+                break;
+
+            case MusicControlKind.MoveScene:
+                MoveSceneCore(control.Index);
+                break;
+
+            case MusicControlKind.LaunchSelectedScene:
+                if (Audio.IsRunning)
+                {
+                    Engine.QueueSceneLaunch(Engine.EditingSceneId);
+                }
+
+                break;
+
+            case MusicControlKind.CycleSessionRowMode:
+                sessionRowMode = (SessionRowMode)(((int)sessionRowMode + 1) % 4);
+                break;
+
             case MusicControlKind.SetKnob:
                 ProcessKnob(control);
                 break;

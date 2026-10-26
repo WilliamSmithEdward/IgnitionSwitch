@@ -17,6 +17,7 @@
     <EnableMsixTooling>false</EnableMsixTooling>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Update="Views\MainWindow.Scenes.cs" DependentUpon="MainWindow.xaml" />
     <Compile Update="App.xaml.cs" DependentUpon="App.xaml" />
     <Compile Update="Views\MainWindow.xaml.cs" DependentUpon="MainWindow.xaml" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="[1.8.260921001]" />

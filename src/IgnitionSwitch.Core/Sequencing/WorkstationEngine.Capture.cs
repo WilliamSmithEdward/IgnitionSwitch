@@ -21,8 +21,8 @@ public sealed partial class WorkstationEngine
         }
     }
 
-    /// <summary>Atomically merges the latest four-bar live phrase across all tracks as one undoable edit, preserving transport, recording, and live ownership.</summary>
-    /// <remarks>Retrospective state is bounded and transient. Onsets use their note-on grid policy; gate durations preserve performed timing. Capacity or relevant history loss leaves project content unchanged.</remarks>
+    /// <summary>Atomically merges the latest four-bar live phrase across all tracks into the editing scene as one undoable edit, preserving transport, recording, and live ownership.</summary>
+    /// <remarks>Retrospective state is bounded and transient. Onsets use their note-on grid policy; gate durations preserve performed timing. Capacity or relevant history loss leaves project content unchanged. Playing destinations align to their local clip origins; inactive destinations retain the common phrase anchor.</remarks>
     public CaptureResult CaptureRecentPerformance()
     {
         lock (_sync)
@@ -71,8 +71,15 @@ public sealed partial class WorkstationEngine
             }
 
             double offset = window.ProjectAligned ? window.ProjectOffset : window.Start;
+            Track lane = _tracks[played.Track];
+
+            if (window.ProjectAligned && lane.ActiveSceneId == _editingSceneId)
+            {
+                offset = window.ProjectOffset + lane.Origin;
+            }
+
             double onset = (start - offset) % LoopBeats;
-            onset = onset < 0 ? onset + LoopBeats : onset;
+            onset = WrapClipBeat(onset);
             onset = played.Quantize ? QuantizeOnset(onset) : onset;
             double duration = Math.Clamp(end - start, played.MinimumDuration, LoopBeats);
             CaptureKey key = new(played.Track, played.Note, onset);
@@ -120,13 +127,22 @@ public sealed partial class WorkstationEngine
                 {
                     if (!candidate.Matches(stored.Note))
                     {
-                        changes.Add(new(track, stored.Id, index, stored.Note, candidate.ToNote()));
+                        changes.Add(
+                            new(
+                                track,
+                                stored.Id,
+                                index,
+                                stored.Note,
+                                candidate.ToNote(),
+                                _editingSceneId
+                            )
+                        );
                     }
                 }
 
                 else
                 {
-                    changes.Add(new(track, stored.Id, index, stored.Note, null));
+                    changes.Add(new(track, stored.Id, index, stored.Note, null, _editingSceneId));
                     counts[track]--;
                 }
             }
@@ -143,7 +159,11 @@ public sealed partial class WorkstationEngine
             }
         }
 
-        if (counts.Any(count => count > MaximumNotesPerTrack))
+        if (
+            counts.Any(count => count > MaximumNotesPerTrack)
+            || TotalNoteCount() - _tracks.Sum(track => track.Notes.Count) + counts.Sum()
+                > MaximumProjectNotes
+        )
         {
             return new(CaptureStatus.CapacityExceeded, 0);
         }
@@ -179,9 +199,11 @@ public sealed partial class WorkstationEngine
             int track = candidate.Track;
             int id = NextVoiceId();
             LoopNote note = candidate.ToNote();
-            _history.RecordNote(new(track, id, _tracks[track].Notes.Count, null, note));
-            _tracks[track].Notes.Add(new StoredNote(id, note));
-            DeferCapturedNote(id);
+            _history.RecordNote(
+                new(track, id, _tracks[track].Notes.Count, null, note, _editingSceneId)
+            );
+            _tracks[track].Notes.Add(new StoredNote(id, note, _editingSceneId));
+            DeferCapturedNote(track, id);
         }
 
         RebuildSchedule();
@@ -198,15 +220,21 @@ public sealed partial class WorkstationEngine
 
         if (edit.After is not null)
         {
-            DeferCapturedNote(edit.Id);
+            DeferCapturedNote(edit.Track, edit.Id);
         }
     }
 
-    private void DeferCapturedNote(int id)
+    private void DeferCapturedNote(int track, int id)
     {
-        if (_isPlaying)
+        if (_isPlaying && _tracks[track].ActiveSceneId == _editingSceneId)
         {
-            _pendingLoopStarts[id] = (long)Math.Floor(_absoluteBeat / LoopBeats) + 1;
+            _pendingLoopStarts[id] = new(
+                (long)Math.Floor(
+                    (_absoluteBeat - _tracks[track].Origin + BeatBoundaryTolerance) / LoopBeats
+                )
+                    + 1,
+                _tracks[track].Generation
+            );
         }
     }
 }

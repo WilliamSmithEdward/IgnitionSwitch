@@ -45,8 +45,9 @@ internal sealed class EditHistory
         if (
             continuous
             && pending is { IsNoteEdit: false } current
-            && current.Scalar.Address == edit.Address
-            && Stopwatch.GetElapsedTime(lastScalarTimestamp, timestamp) <= GestureIdle
+            && current.Scene is null
+                && current.Scalar.Address == edit.Address
+                && Stopwatch.GetElapsedTime(lastScalarTimestamp, timestamp) <= GestureIdle
         )
         {
             current.SetScalarAfter(edit.After);
@@ -64,6 +65,13 @@ internal sealed class EditHistory
         {
             Commit();
         }
+    }
+
+    public void RecordScene(SceneEdit edit)
+    {
+        Commit();
+        pending = new SessionEdit(false, default) { Scene = edit };
+        Commit();
     }
 
     public void Commit()

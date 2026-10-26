@@ -6,11 +6,13 @@ internal sealed class SessionEdit(bool isNoteEdit, ScalarEdit scalar)
     private readonly Dictionary<int, int> noteIndices = [];
     private int changedNotes;
 
+    public SceneEdit? Scene { get; init; }
     public bool IsNoteEdit { get; } = isNoteEdit;
     public ScalarEdit Scalar { get; private set; } = scalar;
     public IReadOnlyList<NoteEdit> Notes => notes;
-    public int RetainedNoteCount => notes.Count;
-    public bool HasChanges => IsNoteEdit ? changedNotes > 0 : Scalar.Before != Scalar.After;
+    public int RetainedNoteCount => notes.Count + (Scene?.Notes.Count ?? 0);
+    public bool HasChanges =>
+        Scene is not null || (IsNoteEdit ? changedNotes > 0 : Scalar.Before != Scalar.After);
 
     public void AddNote(NoteEdit edit)
     {

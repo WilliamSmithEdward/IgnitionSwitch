@@ -10,5 +10,6 @@ public sealed record ControllerFeedback(
     bool LoopEnabled = true,
     IReadOnlyList<ControllerKnobFeedback>? Knobs = null,
     string? DeviceName = null,
-    bool DeviceLocked = false
+    bool DeviceLocked = false,
+    ControllerSessionFeedback? Session = null
 );

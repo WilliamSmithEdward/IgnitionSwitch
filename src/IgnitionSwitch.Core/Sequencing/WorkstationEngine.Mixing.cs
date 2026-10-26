@@ -35,6 +35,13 @@ public sealed partial class WorkstationEngine
             _sequencedMono[track] = 0;
         }
 
+        bool anySolo = false;
+
+        foreach (Track lane in _tracks)
+        {
+            anySolo |= lane.IsSolo;
+        }
+
         for (int voiceIndex = _voices.Count - 1; voiceIndex >= 0; voiceIndex--)
         {
             SynthVoice voice = _voices[voiceIndex];
@@ -47,7 +54,7 @@ public sealed partial class WorkstationEngine
                 sound.ReleasePhysical
             );
 
-            if (!track.IsMuted)
+            if (!track.IsMuted && (!anySolo || track.IsSolo))
             {
                 if (voice.IsLoop)
                 {

@@ -7,7 +7,8 @@ internal readonly record struct NoteEdit(
     int Id,
     int Index,
     LoopNote? Before,
-    LoopNote? After
+    LoopNote? After,
+    int SceneId = 0
 )
 {
     public bool HasChanges => Before != After;
