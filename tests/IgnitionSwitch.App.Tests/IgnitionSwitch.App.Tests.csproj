@@ -11,6 +11,7 @@
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.cs" Link="Services/StudioSession.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/ControllerFactory.cs" Link="Services/ControllerFactory.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Audio/IAudioPlayback.cs" Link="Audio/IAudioPlayback.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Audio/SharedAudioBufferPolicy.cs" Link="Audio/SharedAudioBufferPolicy.cs" />
     <!-- Reuse the dependency-free assertions and render helpers across engine and integration checks. -->
     <Compile Include="../IgnitionSwitch.Core.Tests/Check.cs" Link="Check.cs" />
   </ItemGroup>

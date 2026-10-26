@@ -91,9 +91,11 @@ internal static class StudioSessionTests
             "Beginning a modal operation must stop playback and finalize held recorded notes."
         );
         long revision = session.Revision;
+        SessionSnapshot savedSnapshot = session.CaptureForSave().Snapshot;
         controller.EmitInput(Note(MidiInputKind.NoteOn, 61, 100));
         controller.EmitInput(Note(MidiInputKind.NoteOff, 60));
-        controller.EmitInput(Control(64, 0));
+        controller.EmitInput(Control(64, 127));
+        controller.EmitInput(new MidiInputEvent(MidiInputKind.PitchBend, 0, 0, 12288, true));
         controller.EmitControl(new MusicControlEvent(MusicControlKind.SetTempo, value: 150));
         controller.EmitControl(new MusicControlEvent(MusicControlKind.ToggleTrackMute, 0));
         controller.EmitControl(new MusicControlEvent(MusicControlKind.ToggleRecording));
@@ -104,14 +106,41 @@ internal static class StudioSessionTests
             "Hardware must not edit the project behind a modal dialog."
         );
         Check.That(
+            !session.Engine.IsRecording && !session.Engine.IsPlaying,
+            "Live performance must not restart transport or recording during a modal operation."
+        );
+        Check.That(
+            Check.Energy(Check.Render(session.Engine, 0.05)) > 1,
+            "A file dialog must not discard valid new performance notes."
+        );
+        controller.EmitInput(Note(MidiInputKind.NoteOff, 61));
+        Check.That(
+            Check.Energy(Check.Render(session.Engine, 0.2)) > 1,
+            "Live sustain must remain usable while a modal transaction is active."
+        );
+        controller.EmitInput(Control(64, 0));
+        _ = Check.Render(session.Engine, 0.2);
+        Check.That(
             Check.Energy(Check.Render(session.Engine, 0.05)) == 0,
-            "New notes must remain silent while the modal transaction is active."
+            "Modal note-off and pedal-up must release live performance."
+        );
+        Check.That(
+            session
+                .CaptureForSave()
+                .Snapshot.Tracks[0].Notes.SequenceEqual(savedSnapshot.Tracks[0].Notes)
+                && session.Revision == revision,
+            "Live notes during a modal operation must not change captured or current recorded data."
         );
         session.IsInteractionBlocked = false;
         controller.EmitInput(Note(MidiInputKind.NoteOn, 62, 100));
         Check.That(
             Check.Energy(Check.Render(session.Engine, 0.1)) > 1,
             "Performance must resume after the modal transaction ends."
+        );
+        controller.EmitInput(Control(123, 0));
+        Check.That(
+            Check.Energy(Check.Render(session.Engine, 0.05)) == 0,
+            "Panic must still clear modal and post-modal note ownership."
         );
     }
 

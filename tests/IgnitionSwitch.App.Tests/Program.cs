@@ -3,6 +3,10 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Shared audio buffer requests follow driver periods with a positive bounded fallback",
+        AudioBufferTests.SharedPeriod
+    ),
+    (
         "MIDI note ownership survives track selection and separates drums",
         StudioSessionTests.Ownership
     ),
@@ -15,8 +19,20 @@ using IgnitionSwitch.App;
         StudioSessionTests.GenericPlaybackPauseResume
     ),
     (
-        "Modal transactions finalize recording and block new hardware mutations",
+        "Modal transactions preserve live performance while blocking project mutations",
         StudioSessionTests.ModalIsolation
+    ),
+    (
+        "Rapid 37-key chords and retriggers preserve every recorded input and release",
+        InputReliabilityTests.RapidChords
+    ),
+    (
+        "Overlapping MIDI channels retain independent release ownership",
+        InputReliabilityTests.ChannelOwnership
+    ),
+    (
+        "Project replacement resets modal live note and pedal ownership atomically",
+        InputReliabilityTests.ProjectReplacement
     ),
     (
         "Saved revisions retain newer edits and finalized durations advance revision",

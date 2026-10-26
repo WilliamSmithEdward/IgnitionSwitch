@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using IgnitionSwitch.Core.Sequencing;
 using NAudio.CoreAudioApi;
+using NAudio.CoreAudioApi.Interfaces;
 using NAudio.Wave;
 
 namespace IgnitionSwitch.App.Audio;
@@ -11,15 +12,20 @@ internal sealed partial class AudioPlayback(WorkstationEngine engine) : IAudioPl
     private WasapiOut? output;
     private bool disposed;
     private long lastStart;
+    private volatile bool playbackFailed;
+    private string? outputDeviceId;
+    private string? compatibilityDeviceId;
 
     public string Status { get; private set; } = "Audio is starting…";
-    public bool IsRunning => output?.PlaybackState == PlaybackState.Playing;
+    public bool IsRunning => !playbackFailed && output?.PlaybackState == PlaybackState.Playing;
+    public int RequestedBufferMilliseconds { get; private set; }
 
     public void Start()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         lastStart = Environment.TickCount64;
         DisposeOutput();
+        playbackFailed = false;
 
         try
         {
@@ -28,9 +34,38 @@ internal sealed partial class AudioPlayback(WorkstationEngine engine) : IAudioPl
                 DataFlow.Render,
                 Role.Multimedia
             );
-            output = new WasapiOut(device, AudioClientShareMode.Shared, true, 30);
+            outputDeviceId = device.ID;
+            int preferred = PreferredBufferMilliseconds(device);
+
+            if (StringComparer.Ordinal.Equals(compatibilityDeviceId, outputDeviceId))
+            {
+                preferred = SharedAudioBufferPolicy.CompatibilityBufferMilliseconds;
+            }
+
+            try
+            {
+                output = InitializeOutput(device, preferred);
+                RequestedBufferMilliseconds = preferred;
+            }
+
+            catch (COMException exception) when (
+                preferred < SharedAudioBufferPolicy.CompatibilityBufferMilliseconds
+            )
+            {
+                Trace.TraceWarning(
+                    "Preferred shared audio buffer was rejected: {0}",
+                    exception.Message
+                );
+                output = InitializeOutput(
+                    device,
+                    SharedAudioBufferPolicy.CompatibilityBufferMilliseconds
+                );
+                compatibilityDeviceId = outputDeviceId;
+                RequestedBufferMilliseconds =
+                    SharedAudioBufferPolicy.CompatibilityBufferMilliseconds;
+            }
+
             output.PlaybackStopped += OnPlaybackStopped;
-            output.Init(new EngineSampleProvider(engine));
             output.Play();
             SetStatus($"Audio · {device.FriendlyName}");
         }
@@ -65,6 +100,15 @@ internal sealed partial class AudioPlayback(WorkstationEngine engine) : IAudioPl
     {
         if (!disposed && ReferenceEquals(sender, output) && args.Exception is not null)
         {
+            playbackFailed = true;
+            compatibilityDeviceId = args.Exception is COMException
+            {
+                ErrorCode: AudioClientErrorCode.DeviceInvalidated
+                    or AudioClientErrorCode.ResourcesInvalidated
+                    or AudioClientErrorCode.ServiceNotRunning
+            }
+                ? null
+                : outputDeviceId;
             Trace.TraceWarning("Audio playback stopped: {0}", args.Exception.Message);
             SetStatus("Audio output changed · reconnecting…");
         }
@@ -73,6 +117,43 @@ internal sealed partial class AudioPlayback(WorkstationEngine engine) : IAudioPl
     private void SetStatus(string status)
     {
         Status = status;
+    }
+
+    private static int PreferredBufferMilliseconds(MMDevice device)
+    {
+        try
+        {
+            using AudioClient client = device.AudioClient;
+            return SharedAudioBufferPolicy.PreferredMilliseconds(client.DefaultDevicePeriod);
+        }
+
+        catch (COMException exception)
+        {
+            Trace.TraceWarning("Could not query the shared audio period: {0}", exception.Message);
+            return SharedAudioBufferPolicy.PreferredMilliseconds(0);
+        }
+    }
+
+    private WasapiOut InitializeOutput(MMDevice device, int requestedMilliseconds)
+    {
+        var candidate = new WasapiOut(
+            device,
+            AudioClientShareMode.Shared,
+            true,
+            requestedMilliseconds
+        );
+
+        try
+        {
+            candidate.Init(new EngineSampleProvider(engine));
+            return candidate;
+        }
+
+        catch
+        {
+            candidate.Dispose();
+            throw;
+        }
     }
 
     private void DisposeOutput()

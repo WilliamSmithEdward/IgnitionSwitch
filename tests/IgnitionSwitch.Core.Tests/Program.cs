@@ -1,6 +1,10 @@
 (string Name, Func<Task> Run)[] tests =
 [
     ("Playable instruments produce bounded finite stereo audio", AudioTests.Instruments),
+    (
+        "Render quanta preserve offset guards, clock continuity, and callback partition output",
+        AudioTests.RenderPartitions
+    ),
     ("Sustain, note ownership, retrigger, and panic release voices", AudioTests.Release),
     ("Transport advances from audio samples and wraps four bars", SequencingTests.Transport),
     (
@@ -8,6 +12,10 @@
         SequencingTests.Pause
     ),
     ("Recording quantizes, replaces overdubs, and replays", SequencingTests.Recording),
+    (
+        "Incremental recording preserves ordered playback, burst releases, capacity, and note revisions",
+        InputStressTests.OrderedInputs
+    ),
     ("Notes spanning the loop boundary preserve their duration", SequencingTests.WrappingNote),
     ("Track mute, clear, and gain affect playback", SequencingTests.Tracks),
     ("Invalid controls and buffers fail before rendering", ValidationTests.Controls),

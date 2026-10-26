@@ -11,6 +11,9 @@ namespace IgnitionSwitch.App.Presentation;
 
 internal static class InstrumentControls
 {
+    private static readonly Dictionary<string, SolidColorBrush> Brushes = new(
+        StringComparer.OrdinalIgnoreCase
+    );
     private static readonly string[] DrumNames = [
         "Kick", "Rim", "Snare", "Clap", "Snare II", "Low tom", "Closed hat", "Tom", "Pedal hat",
         "Low percussion", "Open hat", "Mid tom", "High tom", "Cymbal", "High percussion", "Ride"
@@ -18,7 +21,12 @@ internal static class InstrumentControls
 
     public static SolidColorBrush Brush(string hex)
     {
-        return new(
+        if (Brushes.TryGetValue(hex, out SolidColorBrush? cached))
+        {
+            return cached;
+        }
+
+        var brush = new SolidColorBrush(
             Color.FromArgb(
                 255,
                 byte.Parse(hex.AsSpan(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture),
@@ -26,6 +34,8 @@ internal static class InstrumentControls
                 byte.Parse(hex.AsSpan(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
             )
         );
+        Brushes.Add(hex, brush);
+        return brush;
     }
 
     public static TrackControls CreateTrack(TrackState track, int index)
@@ -101,17 +111,18 @@ internal static class InstrumentControls
             int note = index + 36;
             var content = new TextBlock
             {
-                Text = DrumNames[index],
+                Text = DrumNames[index].Replace("percussion", "perc.", StringComparison.Ordinal),
                 FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
+                MaxLines = 2,
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center
             };
             var button = new Button
             {
                 Content = content,
-                Style = (Style)Application.Current.Resources["PadButtonStyle"],
-                Padding = new Thickness(12)
+                Style = (Style)Application.Current.Resources["PadButtonStyle"]
             };
             Grid.SetRow(button, index < 8 ? 1 : 0);
             Grid.SetColumn(button, index % 8);

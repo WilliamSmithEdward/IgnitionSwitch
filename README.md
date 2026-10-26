@@ -9,7 +9,7 @@ This is an early working foundation. The Launchkey 37 MK3 comes first; hardware 
 - Four tracks: velvet keys, round bass, soft atmosphere, and synthesized drums.
 - Velocity-sensitive playing, sustain, pitch bend, a metronome, and quantized loop recording.
 - Track gain, mute, master volume, and tempo controls.
-- A focused loop view and sixteen on-screen drum pads.
+- A focused loop view, sixteen on-screen drum pads, and resize handles for both workspace splits.
 - Play/pause that preserves position, with a separate stop/rewind action.
 - Save and reopen projects as `.ignition.json` files.
 - Launchkey discovery, verified model identification, mapped transport and session controls, pad feedback, and LCD track labels.
@@ -38,6 +38,8 @@ The Windows App SDK and application dependencies are pinned in the project files
 Connect the Launchkey by USB, select a track, and press **Record** or **R** to capture a phrase. Press Record again to keep it looping; select another track to add a layer. Drum mode plays the drum track, and recording uses a sixteenth-note grid.
 
 **Space** plays/pauses at the current position; **Esc** stops and rewinds. Pause ends recording and keeps live playing available. Choose **Save** to store the session. Connection/audio details are in **Devices**, and **?** opens shortcut help.
+
+Drag the handle beside Tracks to change its width, or the handle between Loop and Drums to change their heights. Tab to a handle and use its arrow keys for keyboard resizing. The layout follows the window size without horizontal scrolling.
 
 The app uses the Windows default audio output. In the supported hardware Device/Volume pot modes, pots 1–4 adjust track gains, pot 5 adjusts master gain, and pot 6 adjusts tempo. The Launchkey sends MIDI and has no sound engine of its own.
 

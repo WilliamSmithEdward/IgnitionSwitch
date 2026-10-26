@@ -20,14 +20,17 @@ public sealed partial class MainWindow : Window, IDisposable
 {
     private readonly StudioSession session;
     private readonly LoopTimeline timeline;
-    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(80) };
+    private readonly WorkspaceLayout workspaceLayout;
+    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly List<TrackControls> trackControls = [];
     private bool updating;
     private bool closingAllowed;
     private bool dialogOpen;
     private bool disposed;
     private bool showingAudioError;
-    private string timelineKey = string.Empty;
+    private long timelineRevision = -1;
+    private long lastStateRefresh;
+    private double minimumWindowScale;
     private string sessionName = "Untitled";
 
     /// <summary>Creates the workspace and initializes its audio and hardware services on load.</summary>
@@ -46,11 +49,31 @@ public sealed partial class MainWindow : Window, IDisposable
             RefreshState();
         });
         BuildInstruments();
+        workspaceLayout = new WorkspaceLayout(
+            WorkspaceScroll,
+            WorkspaceRoot,
+            WorkspaceBody,
+            TrackColumn,
+            EditorGrid,
+            LoopRow,
+            DrumsRow,
+            TrackResizeHandle,
+            LoopResizeHandle
+        );
         WireControls();
-        timer.Tick += (_, _) => RefreshState();
+        timer.Tick += (_, _) =>
+        {
+            timeline.UpdatePosition(session.Engine.BeatPosition, session.Engine.IsPlaying);
+
+            if (Environment.TickCount64 - lastStateRefresh >= 100)
+            {
+                RefreshState();
+            }
+        };
         ((FrameworkElement)Content).Loaded += (_, _) =>
         {
             ResizeWorkspace();
+            Content.XamlRoot.Changed += OnXamlRootChanged;
             session.Start();
             RefreshState();
             timer.Start();
@@ -72,6 +95,13 @@ public sealed partial class MainWindow : Window, IDisposable
 
         disposed = true;
         timer.Stop();
+
+        if (Content.XamlRoot is { } xamlRoot)
+        {
+            xamlRoot.Changed -= OnXamlRootChanged;
+        }
+
+        workspaceLayout.Dispose();
         session.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -112,6 +142,7 @@ public sealed partial class MainWindow : Window, IDisposable
     {
         var display = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
         double scale = Content.XamlRoot.RasterizationScale;
+        SetMinimumWindowSize(display, scale);
         int width = Math.Min((int)(1360 * scale), display.WorkArea.Width);
         int height = Math.Min((int)(840 * scale), display.WorkArea.Height);
         AppWindow.MoveAndResize(
@@ -122,6 +153,34 @@ public sealed partial class MainWindow : Window, IDisposable
                 height
             )
         );
+    }
+
+    private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
+    {
+        if (minimumWindowScale != sender.RasterizationScale)
+        {
+            SetMinimumWindowSize(
+                DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest),
+                sender.RasterizationScale
+            );
+        }
+    }
+
+    private void SetMinimumWindowSize(DisplayArea display, double scale)
+    {
+        minimumWindowScale = scale;
+
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = Math.Min(
+                (int)Math.Ceiling(960 * scale),
+                display.WorkArea.Width
+            );
+            presenter.PreferredMinimumHeight = Math.Min(
+                (int)Math.Ceiling(600 * scale),
+                display.WorkArea.Height
+            );
+        }
     }
 
     private void WireControls()
@@ -228,6 +287,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void RefreshState()
     {
+        lastStateRefresh = Environment.TickCount64;
         updating = true;
         session.Audio.EnsureRunning();
         WorkstationEngine engine = session.Engine;
@@ -282,13 +342,16 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         Title = session.HasChanges ? "IgnitionSwitch · Unsaved session" : "IgnitionSwitch";
-        string key =
-            $"{session.Revision}:{engine.SelectedTrack}:{string.Join(',', tracks.Select(track => track.NoteCount))}";
 
-        if (timelineKey != key)
+        if (timelineRevision != engine.NoteRevision)
         {
-            timelineKey = key;
+            timelineRevision = engine.NoteRevision;
             DrawTimeline();
+        }
+
+        else
+        {
+            timeline.UpdateTracks(tracks, engine.SelectedTrack);
         }
 
         session.RefreshFeedback();
@@ -336,7 +399,7 @@ public sealed partial class MainWindow : Window, IDisposable
             session.SelectTrack(selectedTrack);
             session.Engine.ClearSelectedTrack();
             session.MarkChanged();
-            timelineKey = string.Empty;
+            timelineRevision = -1;
             StatusText.Text = "Track cleared.";
             RefreshState();
         }
@@ -350,7 +413,6 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         SetInteractionBlocked(true);
-        session.Stop();
 
         try
         {
@@ -409,7 +471,6 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         SetInteractionBlocked(true);
-        session.Stop();
 
         try
         {
@@ -427,10 +488,10 @@ public sealed partial class MainWindow : Window, IDisposable
             }
 
             SessionSnapshot snapshot = await SessionStore.LoadAsync(file.Path);
-            session.Engine.ApplySession(snapshot);
+            session.ApplySession(snapshot);
             session.MarkSaved();
             SetSessionName(file.Name);
-            timelineKey = string.Empty;
+            timelineRevision = -1;
             StatusText.Text = $"Opened · {file.Name}";
         }
 

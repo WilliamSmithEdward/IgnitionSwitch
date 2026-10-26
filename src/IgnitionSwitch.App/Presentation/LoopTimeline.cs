@@ -14,86 +14,147 @@ internal sealed class LoopTimeline
     private const double RulerHeight = 24;
     private readonly Grid host;
     private readonly Action<int> selectTrack;
-    private SessionSnapshot? snapshot;
+    private readonly Canvas canvas = new();
+    private readonly RectangleGeometry clip = new();
+    private readonly List<LaneVisual> lanes = [];
+    private readonly List<Border> beatLines = [];
+    private readonly List<TextBlock> barLabels = [];
+    private readonly Border playhead = new()
+    {
+        Width = 2,
+        Background = InstrumentControls.Brush("#FFB05C"),
+        IsHitTestVisible = false
+    };
+    private readonly HashSet<LoopNote> seenNotes = [];
+    private readonly List<LoopNote> removedNotes = [];
     private IReadOnlyList<TrackState> tracks = [];
-    private int selectedTrack;
-    private Border? playhead;
+    private double beats = 16;
     private double position;
-    private bool playing;
+    private double width;
+    private double height;
+    private int selectedTrack;
 
     public LoopTimeline(Grid host, Action<int> selectTrack)
     {
         this.host = host;
         this.selectTrack = selectTrack;
-        host.SizeChanged += (_, _) => Draw();
+        canvas.Clip = clip;
+        host.Children.Add(canvas);
+        host.SizeChanged += (_, _) => Arrange();
     }
 
     public void Render(SessionSnapshot session, IReadOnlyList<TrackState> trackStates, int selected)
     {
-        snapshot = session;
-        tracks = trackStates;
-        selectedTrack = selected;
-        Draw();
-    }
+        double newBeats = session.LoopBars * 4;
 
-    public void UpdatePosition(double beat, bool isPlaying)
-    {
-        position = beat;
-        playing = isPlaying;
-
-        if (playhead is null || snapshot is null)
+        if (lanes.Count != session.Tracks.Count || beats != newBeats)
         {
-            return;
+            beats = newBeats;
+            CreateVisuals(session.Tracks.Count);
         }
 
-        double width = Math.Max(0, host.ActualWidth - LabelWidth);
-        Canvas.SetLeft(playhead, LabelWidth + (beat / (snapshot.LoopBars * 4) * width));
+        UpdateTracks(trackStates, selected);
+
+        for (int index = 0; index < lanes.Count; index++)
+        {
+            LaneVisual lane = lanes[index];
+            seenNotes.Clear();
+
+            foreach (LoopNote note in session.Tracks[index].Notes)
+            {
+                _ = seenNotes.Add(note);
+
+                if (!lane.Notes.TryGetValue(note, out NoteVisual? visual))
+                {
+                    visual = new NoteVisual();
+                    lane.Notes.Add(note, visual);
+                    lane.Geometry.Children.Add(visual.First);
+                    lane.Geometry.Children.Add(visual.Wrapped);
+                    ArrangeNote(index, note, visual);
+                }
+            }
+
+            removedNotes.Clear();
+
+            foreach (LoopNote note in lane.Notes.Keys)
+            {
+                if (!seenNotes.Contains(note))
+                {
+                    removedNotes.Add(note);
+                }
+            }
+
+            foreach (LoopNote note in removedNotes)
+            {
+                NoteVisual visual = lane.Notes[note];
+                _ = lane.Geometry.Children.Remove(visual.First);
+                _ = lane.Geometry.Children.Remove(visual.Wrapped);
+                _ = lane.Notes.Remove(note);
+            }
+        }
+
+        if (width != host.ActualWidth || height != host.ActualHeight)
+        {
+            Arrange();
+        }
+    }
+
+    public void UpdateTracks(IReadOnlyList<TrackState> trackStates, int selected)
+    {
+        tracks = trackStates;
+        selectedTrack = selected;
+
+        for (int index = 0; index < lanes.Count; index++)
+        {
+            LaneVisual lane = lanes[index];
+            TrackState track = tracks[index];
+            lane.Label.Text = track.Name;
+            lane.Label.Foreground = InstrumentControls.Brush(track.ColorHex);
+            lane.Label.Opacity = track.IsMuted ? 0.45 : 1;
+            lane.Button.Background = InstrumentControls.Brush(
+                index == selectedTrack ? "#252B38" : "#151A23"
+            );
+            lane.Path.Fill = InstrumentControls.Brush(track.ColorHex);
+            lane.Path.Opacity = track.IsMuted ? 0.3 : 0.9;
+            AutomationProperties.SetName(lane.Button, $"Select {track.Name} loop lane");
+        }
+    }
+
+    public void UpdatePosition(double beat, bool playing)
+    {
+        position = beat;
+        Canvas.SetLeft(playhead, LabelWidth + (beat / beats * Math.Max(0, width - LabelWidth)));
         playhead.Opacity = playing ? 1 : 0.45;
     }
 
-    private void Draw()
+    private void CreateVisuals(int count)
     {
-        host.Children.Clear();
-        playhead = null;
+        canvas.Children.Clear();
+        lanes.Clear();
+        beatLines.Clear();
+        barLabels.Clear();
 
-        if (snapshot is null || host.ActualWidth <= LabelWidth || host.ActualHeight <= RulerHeight)
+        for (int index = 0; index < count; index++)
         {
-            return;
-        }
-
-        double width = host.ActualWidth;
-        double height = host.ActualHeight;
-        double gridWidth = width - LabelWidth;
-        double laneHeight = (height - RulerHeight) / snapshot.Tracks.Count;
-        double beats = snapshot.LoopBars * 4;
-        var canvas = new Canvas
-        {
-            Width = width,
-            Height = height
-        };
-        host.Children.Add(canvas);
-
-        for (int index = 0; index < snapshot.Tracks.Count; index++)
-        {
-            AddLane(canvas, index, width, laneHeight, gridWidth, beats);
+            int trackIndex = index;
+            var lane = new LaneVisual();
+            lane.Button.Click += (_, _) => selectTrack(trackIndex);
+            lanes.Add(lane);
+            canvas.Children.Add(lane.Button);
         }
 
         for (int beat = 0; beat <= beats; beat++)
         {
-            double left = LabelWidth + (beat / beats * gridWidth);
-            bool barLine = beat % 4 == 0;
             var line = new Border
             {
                 Width = 1,
-                Height = height - RulerHeight,
-                Background = InstrumentControls.Brush(barLine ? "#414958" : "#282E39"),
+                Background = InstrumentControls.Brush(beat % 4 == 0 ? "#414958" : "#282E39"),
                 IsHitTestVisible = false
             };
-            Canvas.SetLeft(line, left);
-            Canvas.SetTop(line, RulerHeight);
+            beatLines.Add(line);
             canvas.Children.Add(line);
 
-            if (barLine && beat < beats)
+            if (beat % 4 == 0 && beat < beats)
             {
                 var label = new TextBlock
                 {
@@ -102,93 +163,115 @@ internal sealed class LoopTimeline
                     Foreground = InstrumentControls.Brush("#9CA8BA"),
                     IsHitTestVisible = false
                 };
-                Canvas.SetLeft(label, left + 6);
+                barLabels.Add(label);
                 canvas.Children.Add(label);
             }
         }
 
-        playhead = new Border
+        foreach (LaneVisual lane in lanes)
         {
-            Width = 2,
-            Height = height - RulerHeight,
-            Background = InstrumentControls.Brush("#FFB05C"),
-            IsHitTestVisible = false
-        };
-        Canvas.SetTop(playhead, RulerHeight);
+            canvas.Children.Add(lane.Path);
+        }
+
         canvas.Children.Add(playhead);
-        UpdatePosition(position, playing);
+        Arrange();
     }
 
-    private void AddLane(
-        Canvas canvas,
-        int index,
-        double width,
-        double height,
-        double gridWidth,
-        double beats
-    )
+    private void Arrange()
     {
-        TrackSnapshot track = snapshot!.Tracks[index];
-        string color = tracks[index].ColorHex;
-        double top = RulerHeight + (index * height);
-        var lane = new Button
-        {
-            Width = width,
-            Height = height - 2,
-            Padding = new Thickness(10, 0, 0, 0),
-            BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(4),
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Background = InstrumentControls.Brush(index == selectedTrack ? "#252B38" : "#151A23"),
-            Content = new TextBlock
-            {
-                Text = track.Name,
-                Width = LabelWidth - 18,
-                FontSize = 11,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = InstrumentControls.Brush(color),
-                Opacity = track.IsMuted ? 0.45 : 1,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
-        lane.Click += (_, _) => selectTrack(index);
-        AutomationProperties.SetName(lane, $"Select {track.Name} loop lane");
-        Canvas.SetTop(lane, top);
-        canvas.Children.Add(lane);
-        var geometry = new GeometryGroup();
+        width = host.ActualWidth;
+        height = host.ActualHeight;
+        clip.Rect = new Rect(0, 0, width, height);
 
-        foreach (LoopNote note in track.Notes)
+        if (lanes.Count == 0 || width <= LabelWidth || height <= RulerHeight)
         {
-            double noteTop = top + 6 + ((1 - (note.Note % 12 / 11.0)) * Math.Max(0, height - 20));
-            double length = Math.Max(3, note.Duration / beats * gridWidth);
-            double left = note.Beat / beats * gridWidth;
-            double visible = Math.Min(length, gridWidth - left);
-            geometry.Children.Add(
-                new RectangleGeometry { Rect = new Rect(LabelWidth + left, noteTop, visible, 7) }
-            );
+            return;
+        }
 
-            if (length > visible)
+        double gridWidth = width - LabelWidth;
+        double laneHeight = (height - RulerHeight) / lanes.Count;
+
+        for (int index = 0; index < lanes.Count; index++)
+        {
+            LaneVisual lane = lanes[index];
+            lane.Button.Width = width;
+            lane.Button.Height = Math.Max(1, laneHeight - 2);
+            Canvas.SetTop(lane.Button, RulerHeight + (index * laneHeight));
+
+            foreach ((LoopNote note, NoteVisual visual) in lane.Notes)
             {
-                geometry.Children.Add(
-                    new RectangleGeometry
-                    {
-                        Rect = new Rect(
-                            LabelWidth,
-                            noteTop,
-                            Math.Min(length - visible, gridWidth),
-                            7
-                        )
-                    }
-                );
+                ArrangeNote(index, note, visual);
             }
         }
 
-        canvas.Children.Add(new Microsoft.UI.Xaml.Shapes.Path
+        for (int beat = 0; beat < beatLines.Count; beat++)
         {
-            Data = geometry,
-            Fill = InstrumentControls.Brush(color),
-            Opacity = track.IsMuted ? 0.3 : 0.9,
-            IsHitTestVisible = false
-        });
+            Border line = beatLines[beat];
+            line.Height = height - RulerHeight;
+            Canvas.SetLeft(line, Math.Min(width - 1, LabelWidth + (beat / beats * gridWidth)));
+            Canvas.SetTop(line, RulerHeight);
+        }
+
+        for (int bar = 0; bar < barLabels.Count; bar++)
+        {
+            Canvas.SetLeft(barLabels[bar], LabelWidth + (bar * 4 / beats * gridWidth) + 6);
+        }
+
+        playhead.Height = height - RulerHeight;
+        Canvas.SetTop(playhead, RulerHeight);
+        Canvas.SetLeft(playhead, LabelWidth + (position / beats * gridWidth));
+    }
+
+    private void ArrangeNote(int index, LoopNote note, NoteVisual visual)
+    {
+        double gridWidth = Math.Max(0, width - LabelWidth);
+        double laneHeight = Math.Max(1, (height - RulerHeight) / lanes.Count);
+        double top = RulerHeight
+            + (index * laneHeight)
+            + 6
+            + ((1 - (note.Note % 12 / 11.0)) * Math.Max(0, laneHeight - 20));
+        double left = note.Beat / beats * gridWidth;
+        double duration = note.Duration / beats * gridWidth;
+        double visible = Math.Max(0, Math.Min(Math.Max(3, duration), gridWidth - left));
+        visual.First.Rect = new Rect(LabelWidth + left, top, visible, 7);
+        visual.Wrapped.Rect = new Rect(
+            LabelWidth,
+            top,
+            note.Beat + note.Duration > beats ? Math.Max(0, duration - (gridWidth - left)) : 0,
+            7
+        );
+    }
+
+    private sealed class NoteVisual
+    {
+        public RectangleGeometry First { get; } = new();
+        public RectangleGeometry Wrapped { get; } = new();
+    }
+
+    private sealed class LaneVisual
+    {
+        public LaneVisual()
+        {
+            Button.Content = Label;
+            Path.Data = Geometry;
+        }
+
+        public Button Button { get; } = new()
+        {
+            Padding = new Thickness(10, 0, 0, 0),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(4),
+            HorizontalContentAlignment = HorizontalAlignment.Left
+        };
+        public TextBlock Label { get; } = new()
+        {
+            Width = LabelWidth - 18,
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        public GeometryGroup Geometry { get; } = new() { FillRule = FillRule.Nonzero };
+        public Microsoft.UI.Xaml.Shapes.Path Path { get; } = new() { IsHitTestVisible = false };
+        public Dictionary<LoopNote, NoteVisual> Notes { get; } = [];
     }
 }

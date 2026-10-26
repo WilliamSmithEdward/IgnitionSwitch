@@ -1,7 +1,106 @@
+using IgnitionSwitch.Core.Domain;
 using IgnitionSwitch.Core.Sequencing;
 
 internal static class AudioTests
 {
+    public static Task RenderPartitions()
+    {
+        using WorkstationEngine contiguous = new()
+        {
+            Tempo = 120,
+            MetronomeEnabled = true
+        };
+        using WorkstationEngine partitioned = new() { MetronomeEnabled = true };
+        SessionSnapshot session = Check.WithNotes(
+            contiguous,
+            0,
+            new LoopNote(60, 100, 0, 0.125),
+            new LoopNote(64, 90, 15.75, 0.5)
+        );
+        TrackSnapshot[] tracks = [.. session.Tracks];
+        tracks[1] = tracks[1] with { Notes = [new LoopNote(43, 90, 4, 2)] };
+        tracks[2] = tracks[2] with { Notes = [new LoopNote(72, 70, 8, 6)] };
+        tracks[3] = tracks[3] with
+        {
+            Notes =
+            [
+                new LoopNote(36, 110, 0, 0.25),
+                new LoopNote(38, 90, 2, 0.25)
+            ]
+        };
+        session = session with { Tracks = tracks };
+        contiguous.ApplySession(session);
+        partitioned.ApplySession(session);
+        contiguous.Play();
+        partitioned.Play();
+        const int Offset = 3;
+        const float Sentinel = 42;
+        int count = WorkstationEngine.SampleRate * 17;
+        float[] wholeBuffer = [.. Enumerable.Repeat(Sentinel, count + (Offset * 2))];
+        float[] splitBuffer = [.. Enumerable.Repeat(Sentinel, count + (Offset * 2))];
+        contiguous.Render(wholeBuffer, Offset, count);
+        int[] framesPerCallback = [1, 31, 64, 97, 113, 256];
+        int written = 0;
+        int callback = 0;
+
+        while (written < count)
+        {
+            int samples = Math.Min(
+                count - written,
+                framesPerCallback[callback++ % framesPerCallback.Length] * 2
+            );
+            partitioned.Render(splitBuffer, Offset + written, samples);
+            written += samples;
+        }
+
+        Check.That(
+            wholeBuffer
+                .AsSpan(Offset, count)
+                .SequenceEqual(splitBuffer.AsSpan(Offset, count)),
+            "Internal render quanta and external callback partitions must retain identical audio across beats and loop wrap."
+        );
+        Check.That(
+            wholeBuffer
+                .Take(Offset)
+                .All(value => value == Sentinel)
+                && wholeBuffer
+                    .Skip(Offset + count)
+                    .All(value => value == Sentinel)
+                && splitBuffer
+                    .Take(Offset)
+                    .All(value => value == Sentinel)
+                && splitBuffer
+                    .Skip(Offset + count)
+                    .All(value => value == Sentinel),
+            "Rendering must preserve samples outside the requested offset/count."
+        );
+        Check.Near(
+            1,
+            contiguous.BeatPosition,
+            1e-6,
+            "Render quanta must retain the exact loop clock"
+        );
+        Check.Near(
+            contiguous.BeatPosition,
+            partitioned.BeatPosition,
+            0,
+            "Callback partitioning must not change transport time"
+        );
+        contiguous.Stop();
+        contiguous.MetronomeEnabled = false;
+        contiguous.NoteOn(60, 100);
+        Check.That(
+            Check
+                .Render(contiguous, 0.005)
+                .Take(128)
+                .Any(value => value != 0),
+            "A live command must enter the next rendered callback without an additional command queue."
+        );
+        contiguous.Dispose();
+        Check.Throws<ObjectDisposedException>(() => contiguous.Render([], 0, 0));
+        return Task.CompletedTask;
+    }
+
     public static Task Instruments()
     {
         using WorkstationEngine engine = new();

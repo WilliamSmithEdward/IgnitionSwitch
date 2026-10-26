@@ -10,6 +10,7 @@ internal sealed partial class StudioSession : IDisposable
     private readonly Lock inputLock = new();
     private readonly Lock feedbackLock = new();
     private readonly Dictionary<(int Channel, int Note), int> noteOwners = [];
+    private readonly int[] activeNoteOwners = new int[WorkstationEngine.TrackCount * 128];
     private readonly HashSet<int> sustainedTracks = [];
     private ControllerFeedback? previousFeedback;
     private long revision;
@@ -137,6 +138,19 @@ internal sealed partial class StudioSession : IDisposable
 
             return (Engine.CaptureSession(), revision);
         }
+    }
+
+    public void ApplySession(SessionSnapshot snapshot)
+    {
+        lock (inputLock)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            Engine.ApplySession(snapshot);
+            ClearPerformanceState();
+            revision++;
+        }
+
+        RefreshFeedback();
     }
 
     public void SelectTrack(int track)
@@ -278,8 +292,7 @@ internal sealed partial class StudioSession : IDisposable
             Controller.InputReceived -= OnInputReceived;
             Controller.ControlReceived -= OnControlReceived;
             Controller.StatusChanged -= OnControllerStatusChanged;
-            noteOwners.Clear();
-            sustainedTracks.Clear();
+            ClearPerformanceState();
         }
 
         try
@@ -336,14 +349,9 @@ internal sealed partial class StudioSession : IDisposable
                 return;
             }
 
-            bool release = input.Kind == MidiInputKind.NoteOff
-                || input is { Kind: MidiInputKind.ControlChange, Number: 64, Value: < 64 }
-                || input is { Kind: MidiInputKind.ControlChange, Number: 120 or 123 };
-
-            if (!interactionBlocked || release)
-            {
-                ProcessPerformance(input);
-            }
+            // Modal operations stop recording and block project controls, while live playing
+            // remains direct and independent of the UI's focus or file-picker message loop.
+            ProcessPerformance(input);
         }
     }
 
@@ -368,15 +376,11 @@ internal sealed partial class StudioSession : IDisposable
 
         switch (input.Kind)
         {
-            case MidiInputKind.NoteOn:
+            case MidiInputKind.NoteOn when input.Value > 0:
                 int track = input.Channel == 9 ? 3 : Engine.SelectedTrack;
-
-                if (noteOwners.Remove(key, out int oldTrack))
-                {
-                    Engine.NoteOff(oldTrack, input.Number);
-                }
-
+                _ = ReleaseNoteOwner(key);
                 noteOwners[key] = track;
+                activeNoteOwners[(track * 128) + input.Number]++;
                 SustainTrackIfNeeded(track);
                 Engine.NoteOn(track, input.Number, input.Value);
 
@@ -387,11 +391,10 @@ internal sealed partial class StudioSession : IDisposable
 
                 break;
 
+            case MidiInputKind.NoteOn:
             case MidiInputKind.NoteOff:
-                if (noteOwners.Remove(key, out int owner))
+                if (ReleaseNoteOwner(key))
                 {
-                    Engine.NoteOff(owner, input.Number);
-
                     if (Engine.IsRecording)
                     {
                         revision++;
@@ -410,9 +413,7 @@ internal sealed partial class StudioSession : IDisposable
 
             case MidiInputKind.ControlChange when input.Number is 120 or 123:
                 Engine.AllNotesOff();
-                noteOwners.Clear();
-                sustainedTracks.Clear();
-                pedalDown = false;
+                ClearPerformanceState();
 
                 if (Engine.IsRecording)
                 {
@@ -506,7 +507,11 @@ internal sealed partial class StudioSession : IDisposable
 
     private void SustainTrackIfNeeded(int track)
     {
-        if (pedalDown && Engine.Tracks[track].Instrument != InstrumentKind.Drums)
+        if (
+            pedalDown
+            && !sustainedTracks.Contains(track)
+            && Engine.Tracks[track].Instrument != InstrumentKind.Drums
+        )
         {
             _ = sustainedTracks.Add(track);
             Engine.SetSustain(track, true);
@@ -567,9 +572,7 @@ internal sealed partial class StudioSession : IDisposable
         bool wasRecording = Engine.IsRecording;
         Engine.Stop();
         Engine.AllNotesOff();
-        noteOwners.Clear();
-        sustainedTracks.Clear();
-        pedalDown = false;
+        ClearPerformanceState();
 
         if (wasRecording)
         {
@@ -580,5 +583,32 @@ internal sealed partial class StudioSession : IDisposable
     private static bool IsTrack(int track)
     {
         return track is >= 0 and < WorkstationEngine.TrackCount;
+    }
+
+    private bool ReleaseNoteOwner((int Channel, int Note) key)
+    {
+        if (!noteOwners.Remove(key, out int track))
+        {
+            return false;
+        }
+
+        int index = (track * 128) + key.Note;
+        activeNoteOwners[index]--;
+
+        if (activeNoteOwners[index] != 0)
+        {
+            return false;
+        }
+
+        Engine.NoteOff(track, key.Note);
+        return true;
+    }
+
+    private void ClearPerformanceState()
+    {
+        noteOwners.Clear();
+        Array.Clear(activeNoteOwners);
+        sustainedTracks.Clear();
+        pedalDown = false;
     }
 }
