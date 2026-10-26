@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using IgnitionSwitch.App.Services;
 using IgnitionSwitch.Core.Sequencing;
 using IgnitionSwitch.Midi.Contracts;
@@ -6,6 +7,8 @@ namespace IgnitionSwitch.App;
 
 internal static class InputDiagnosticsTests
 {
+    private const int AllocationCheckHits = 100000;
+
     public static void CountingAndReset()
     {
         var controller = new FakeMusicController();
@@ -102,23 +105,35 @@ internal static class InputDiagnosticsTests
             "Invalid velocities and velocity-zero releases must not count."
         );
 
-        for (int index = 0; index < 1000; index++)
+        // Warm the exact measured loop, including its tiered-JIT/OSR transitions, rather
+        // than measuring the first execution of a different, much longer loop.
+        for (
+            int batch = 0;
+            batch < 3;
+            batch++
+        )
         {
-            diagnostics.RecordDrumNoteOn(64);
+            CountBatch(diagnostics);
         }
 
         diagnostics.Reset();
         long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
 
-        for (int index = 0; index < 100000; index++)
+        CountBatch(diagnostics);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        long count = diagnostics.Read().DrumNoteOnCount;
+        Check.That(
+            allocated == 0 && count == AllocationCheckHits,
+            $"Counting must be bounded storage with no per-hit allocation. Allocated {allocated} bytes for {count} hits."
+        );
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CountBatch(PerformanceInputDiagnostics diagnostics)
+    {
+        for (int index = 0; index < AllocationCheckHits; index++)
         {
             diagnostics.RecordDrumNoteOn(64);
         }
-
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
-        Check.That(
-            allocated == 0 && diagnostics.Read().DrumNoteOnCount == 100000,
-            "Counting must be bounded storage with no per-hit allocation."
-        );
     }
 }

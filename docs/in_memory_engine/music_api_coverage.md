@@ -72,11 +72,15 @@ The executable runners currently define **30 Core groups**, **14 MIDI groups**, 
 
 The combined verification script passed all 66 groups for this milestone, with zero build warnings/errors, clean prettyCSharp formatting and no outstanding style/analyzer diagnostics at informational severity. Automated checks do not establish physical audio quality or complete hardware coverage.
 
+The received-input allocation check warms the identical non-inlined batch before measuring 100,000 further hits. Its zero-byte assertion remains strict. This separates steady counter work from a reproduced tiered-JIT/on-stack-replacement first-loop allocation on a two-processor runtime; five fresh constrained processes passed after the warm-up correction. The counter implementation and runtime/CI settings are unchanged. The Core inventory remains 155 documented entries.
+
 The running Quantise build was resized separately in width and height to approximately 1,000 × 700 logical pixels. All four tracks, four bars, sixteen pads and the complete status line remained visible without scrollbars; the pad flash matched its resized face. The Loop menu aligned its labels, disabled Quantise on an empty non-recording track, and toggled the transient recording grid without marking content unsaved. Sound checks were unavailable during this pass because Windows reported no default playback output.
 
 The running Loop build's Repeat menu was toggled off and back on. Its checkmark and the `4 bars · once` header agreed, without a phantom unsaved-content change. Natural completion, finalized save contents and retained live-note release were checked through the engine/App regression suites; audible endpoint behavior and the physical button/LCD still need confirmation after restoring audio output.
 
 The parameter build was launched after Windows was unlocked and the empty Loop preview closed. It identified the Launchkey and recovered audio availability (transport became enabled). Width and height were resized separately to 1,000 × 700; all four tracks, four bars and sixteen pads fit without horizontal scrolling. The Sound flyout fit within the window with aligned label/value columns, correct Instrument/Echo controls, and working parameter edit/Undo. Physical feedback and all-bank playing verification remain separate human checks. Capture's menu action is implemented and covered by production coordinator checks; its live action still needs review.
+
+William chose to keep shared audio and reported that playing seems better on the playback-reliability build. The live received-input counter showed 20 messages with velocities 110–127; the matching physical tap count remains unconfirmed. This is encouraging physical feedback, rather than a complete reliability or latency measurement. Knob testing remains deferred.
 
 The local formatter runtime is Python 3.12. GitHub CI pins Python **3.13.17**, whose Windows x64 artifact is listed in the Actions runtime manifest. This tooling pin does not change the API inventory or supported music behavior.
 
