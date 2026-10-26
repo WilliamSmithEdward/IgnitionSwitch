@@ -29,6 +29,7 @@ The following observations come from development smoke tests on 2026-10-26. The 
 | Direct input acceptance and ownership | The application coordinator passed 11/11 hardware-independent check groups, including 4,736 note-on/off events in 64 rapid 37-key chord bursts, cross-channel overlapping-pitch releases, repeated track-changing retriggers, modal live playing and project replacement. Inputs were injected through a test controller into the actual production coordinator; these are not physical MIDI-delivery, listening, or latency measurements. |
 | Responsive workspace | The launched layout displayed all four bars and all 16 pads without horizontal scrolling at approximately 1,348 × 834 and 1,000 × 700 logical window sizes. Both pane handles were dragged successfully; native window width and height were resized separately. Shortcut labels use aligned grid columns in the compact window. |
 | Lower buffering request | A read-only query of the development playback endpoint reported a 10 ms shared default period. Shared/event playback now requests that period, with a 30 ms compatibility fallback. This is a requested duration, not measured key-to-sound latency; render work and recording capacity are covered by the [engine report](../in_memory_engine/music_api_coverage.md#responsiveness-and-measured-compute-cost). |
+| Gain display feedback | All five gain controls share 100 ms compositor easing while their native values and audio targets apply immediately. Running-app automation checked master zero/full endpoints, track target updates, direct pointer takeover and resizing with aligned fill/thumb positions. Physical rapid-pot sweeps and animation cadence remain separate checks. |
 | Keys/pads/pots played by a human | Not yet recorded as a completed physical test. |
 | Actual pad colors/LCD rendering | Feedback packets are implemented and tested against documented bytes; a visual hardware pass is still required. |
 | Audio latency and device timing | No measured hardware latency or timing benchmark yet. |
@@ -66,8 +67,8 @@ Statuses below describe code currently present. The identity/connection and appl
 | Bottom session pads 1–4 | Toggle mute for tracks 1–4. | Stop/Solo/Mute mode cycling and per-clip launch behavior. |
 | Remaining session pads | Unassigned and unlit. | Additional track/clip functions. |
 | Drum pad mode | Performance notes on the default drum channel route to the drum track. | Bank scrolling, drum-pad selection, per-drum colors and all-pad sound review. |
-| Pots 1–4 | Track gains: keys, bass, pad, drums. | Pickup and value synchronization. |
-| Pot 5 | Master gain. | Physical response check. |
+| Pots 1–4 | Track gains: keys, bass, pad, drums. Audio targets apply directly; the on-screen gain controls use visual easing and coalesce feedback on the next UI tick. | Pickup and value synchronization; physical fast-turn review. |
+| Pot 5 | Master gain, with the same visual feedback behavior as track gains. | Physical response check. |
 | Pot 6 | Project tempo, 60–180 BPM. | Hardware arpeggiator clock synchronization. |
 | Pots 7–8 | Deliberately unassigned. | No effect parameters are advertised. |
 | Device/Volume pot modes | The six mappings above are enabled. Device mode is selected on connection. | A richer device parameter page may replace this initial mapping later. |

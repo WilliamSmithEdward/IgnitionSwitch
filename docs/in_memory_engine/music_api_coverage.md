@@ -1,6 +1,6 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, responsive input and incremental sequencing update. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, smooth mixer presentation update. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
@@ -21,6 +21,8 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 
 `WorkstationEngine` therefore declares **34 non-type members**: 20 method overloads, 11 properties, and 3 constants. The full documented Core API has 65 non-type entries plus 7 type entries. `NoteRevision` tracks recorded note-content changes independently of mixer and transport state.
 
+The mixer animation change is confined to the App presentation adapter. It does not add or alter Core API members, gain mapping, audio processing, or saved project data.
+
 ## Implemented behavior and evidence
 
 “Automated” describes executable assertions over implementation behavior. It does not establish physical playing quality, audible device output, or measured latency.
@@ -37,6 +39,7 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 | Render slices and audio buffer policy | Implemented; 64-frame engine critical sections, driver-default-period shared/event output request, 30 ms compatibility fallback, reported playback failure triggers recovery | `AudioTests.RenderPartitions`: callback partition equivalence, metronome/loop continuity, offset guards and next-callback live input; `AudioBufferTests.SharedPeriod`: timing-unit conversion, positive timeouts, bounded fallback | Physical key-to-sound measurement; sub-default shared periods through a future `IAudioClient3` output path; driver glitch/compatibility testing |
 | Loop-boundary duration | Implemented; note durations can extend across loop wrap | `SequencingTests.WrappingNote` checks sound across the boundary and scheduled release | Broader stress/timing measurements |
 | Mixer and clear | Implemented; per-track mute/gain, master gain, selected-track clearing | `SequencingTests.Tracks`; finite-output assertions in `AudioTests.Instruments` | Pan, sends, effect processing, solo, automation |
+| Mixer presentation | Implemented in App adapter; shared 100 ms cubic visual easing for all five volume controls, immediate native target values, coalesced hardware feedback on the UI tick, direct manipulation and reduced-motion behavior | `SliderMotion` and `MainWindow`; running-app checks covered native target updates, master zero/full endpoints, track gain changes, pointer takeover and pane resizing with aligned thumb/fill | Physical fast-pot-turn, keyboard takeover and reduced-motion verification on additional display configurations; screenshots do not measure animation cadence |
 | Session snapshots | Implemented; detached read-only collections, validated apply, version 1 schema | `PersistenceTests.Roundtrip` checks caller mutation and later edits cannot alter stored snapshots; `ValidationTests.Projects` | Schema migrations and variable track/loop capacity |
 | JSON persistence | Implemented; 4 MiB file cap, four tracks/four bars, finite/ranged values, bounded names/events, atomic replacement | `ValidationTests.Projects`; `PersistenceTests.Roundtrip` checks roundtrip, cancellation, old-file preservation, temporary-file cleanup | Audio/MIDI export, additional schema versions |
 | Input and lifecycle validation | Implemented; invalid track/note/gain/buffer controls rejected, disposal prevents further engine work | `ValidationTests.Controls` | Extended concurrency and long-session stress |

@@ -6,6 +6,7 @@ using IgnitionSwitch.App.Services;
 using IgnitionSwitch.Core.Domain;
 using IgnitionSwitch.Core.Persistence;
 using IgnitionSwitch.Core.Sequencing;
+using IgnitionSwitch.Midi.Contracts;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -21,8 +22,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly StudioSession session;
     private readonly LoopTimeline timeline;
     private readonly WorkspaceLayout workspaceLayout;
+    private readonly SliderMotion masterMotion;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly List<TrackControls> trackControls = [];
+    private readonly List<SliderMotion> trackMotions = [];
     private bool updating;
     private bool closingAllowed;
     private bool dialogOpen;
@@ -31,6 +34,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private long timelineRevision = -1;
     private long lastStateRefresh;
     private double minimumWindowScale;
+    private int mixerRefreshRequested;
     private string sessionName = "Untitled";
 
     /// <summary>Creates the workspace and initializes its audio and hardware services on load.</summary>
@@ -49,6 +53,8 @@ public sealed partial class MainWindow : Window, IDisposable
             RefreshState();
         });
         BuildInstruments();
+        masterMotion = new SliderMotion(MasterSlider);
+        session.Controller.ControlReceived += OnControllerControlReceived;
         workspaceLayout = new WorkspaceLayout(
             WorkspaceScroll,
             WorkspaceRoot,
@@ -63,6 +69,11 @@ public sealed partial class MainWindow : Window, IDisposable
         WireControls();
         timer.Tick += (_, _) =>
         {
+            if (Interlocked.Exchange(ref mixerRefreshRequested, 0) != 0)
+            {
+                RefreshVolumes(session.Engine.Tracks);
+            }
+
             timeline.UpdatePosition(session.Engine.BeatPosition, session.Engine.IsPlaying);
 
             if (Environment.TickCount64 - lastStateRefresh >= 100)
@@ -95,6 +106,13 @@ public sealed partial class MainWindow : Window, IDisposable
 
         disposed = true;
         timer.Stop();
+        session.Controller.ControlReceived -= OnControllerControlReceived;
+        masterMotion.Dispose();
+
+        foreach (SliderMotion motion in trackMotions)
+        {
+            motion.Dispose();
+        }
 
         if (Content.XamlRoot is { } xamlRoot)
         {
@@ -115,6 +133,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 session.Engine.Tracks[index],
                 index
             );
+            trackMotions.Add(new SliderMotion(controls.Volume));
             controls.Button.Click += (_, _) =>
             {
                 session.SelectTrack(trackIndex);
@@ -311,7 +330,7 @@ public sealed partial class MainWindow : Window, IDisposable
         PlayLabel.Text = engine.IsPlaying ? "Pause" : "Play";
         RecordLabel.Text = engine.IsRecording ? "Recording" : "Record";
         TempoBox.Value = engine.Tempo;
-        MasterSlider.Value = engine.MasterVolume;
+        RefreshVolumes(tracks);
         MetronomeToggle.IsChecked = engine.MetronomeEnabled;
         MuteButton.IsChecked = tracks[engine.SelectedTrack].IsMuted;
         SelectedTrackText.Text = tracks[engine.SelectedTrack].Name;
@@ -338,7 +357,6 @@ public sealed partial class MainWindow : Window, IDisposable
             controls.Button.BorderBrush = InstrumentControls.Brush(
                 index == engine.SelectedTrack ? track.ColorHex : "#30394A"
             );
-            controls.Volume.Value = track.Volume;
         }
 
         Title = session.HasChanges ? "IgnitionSwitch · Unsaved session" : "IgnitionSwitch";
@@ -372,6 +390,35 @@ public sealed partial class MainWindow : Window, IDisposable
             ? Visibility.Collapsed
             : Visibility.Visible;
         updating = false;
+    }
+
+    private void OnControllerControlReceived(object? sender, MusicControlEvent control)
+    {
+        if (control.Kind is MusicControlKind.SetTrackVolume or MusicControlKind.SetMasterVolume)
+        {
+            _ = Interlocked.Exchange(ref mixerRefreshRequested, 1);
+        }
+    }
+
+    private void RefreshVolumes(IReadOnlyList<TrackState> tracks)
+    {
+        bool previous = updating;
+        updating = true;
+
+        try
+        {
+            masterMotion.SetValue(session.Engine.MasterVolume);
+
+            for (int index = 0; index < tracks.Count; index++)
+            {
+                trackMotions[index].SetValue(tracks[index].Volume);
+            }
+        }
+
+        finally
+        {
+            updating = previous;
+        }
     }
 
     private void DrawTimeline()
