@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RootNamespace>IgnitionSwitch.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <EnableMsixTooling>false</EnableMsixTooling>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="App.xaml.cs" DependentUpon="App.xaml" />
+    <Compile Update="Views\MainWindow.xaml.cs" DependentUpon="MainWindow.xaml" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="[1.8.260921001]" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="[10.0.26100.8249]" />
+    <PackageReference Include="NAudio.Wasapi" Version="[2.2.1]" />
+    <ProjectReference Include="..\IgnitionSwitch.Core\IgnitionSwitch.Core.csproj" />
+    <ProjectReference Include="..\IgnitionSwitch.Midi\IgnitionSwitch.Midi.csproj" />
+  </ItemGroup>
+</Project>

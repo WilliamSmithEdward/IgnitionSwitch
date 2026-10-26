@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <Platforms>AnyCPU;x64</Platforms>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Deterministic>true</Deterministic>
+    <Company>William Smith Edward</Company>
+    <Copyright>Copyright © 2026 William Smith Edward</Copyright>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

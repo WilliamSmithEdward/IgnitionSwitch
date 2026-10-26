@@ -1,0 +1,190 @@
+using IgnitionSwitch.Midi.Contracts;
+using IgnitionSwitch.Midi.Profiles;
+
+namespace IgnitionSwitch.Midi.Protocol;
+
+/// <summary>
+/// Pure MK3 codec based on Novation's Programmer's Reference Guide, version 1, pages 4–17.
+/// Device-specific messages must only be sent after identity verification.
+/// </summary>
+public static class LaunchkeyMk3Protocol
+{
+    /// <summary>Zero-based control-surface channel.</summary>
+    public const int ControlChannel = 15;
+
+    /// <summary>Previous track button CC.</summary>
+    public const int TrackLeft = 102;
+
+    /// <summary>Next track button CC.</summary>
+    public const int TrackRight = 103;
+
+    /// <summary>Capture MIDI button CC.</summary>
+    public const int CaptureMidi = 74;
+
+    /// <summary>Quantise button CC.</summary>
+    public const int Quantise = 75;
+
+    /// <summary>Metronome button CC.</summary>
+    public const int Click = 76;
+
+    /// <summary>Undo button CC.</summary>
+    public const int Undo = 77;
+
+    /// <summary>Play button CC.</summary>
+    public const int Play = 115;
+
+    /// <summary>Stop button CC.</summary>
+    public const int Stop = 116;
+
+    /// <summary>Record button CC.</summary>
+    public const int Record = 117;
+
+    /// <summary>Loop button CC.</summary>
+    public const int Loop = 118;
+
+    /// <summary>Pad mode change and report CC.</summary>
+    public const int PadModeController = 3;
+
+    /// <summary>Pot mode change and report CC.</summary>
+    public const int PotModeController = 9;
+
+    /// <summary>First of eight consecutive pot CC numbers.</summary>
+    public const int FirstKnobController = 21;
+
+    /// <summary>A universal, manufacturer-independent device inquiry.</summary>
+    public static byte[] IdentityInquiry()
+    {
+        return [0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7];
+    }
+
+    /// <summary>Enters or leaves the MK3 control-surface mode on its DAW output.</summary>
+    public static byte[] DawMode(bool enabled)
+    {
+        return
+        [
+            0x9F,
+            0x0C,
+            enabled ? (byte)0x7F : (byte)0
+        ];
+    }
+
+    /// <summary>Selects the session pad layout.</summary>
+    public static byte[] SessionPadMode()
+    {
+        return [0xBF, 0x03, 0x02];
+    }
+
+    /// <summary>Selects the device pot layout.</summary>
+    public static byte[] DevicePotMode()
+    {
+        return [0xBF, 0x09, 0x02];
+    }
+
+    /// <summary>Accepts a complete Novation 37 MK3 application identity, rejecting other models and bootloaders.</summary>
+    public static bool TryReadIdentity(ReadOnlySpan<byte> data, out ControllerIdentity? identity)
+    {
+        identity = null;
+
+        if (
+            data.Length != 17
+            || data[0] != 0xF0
+            || data[1] != 0x7E
+            || data[2] > 0x7F
+            || data[3] != 0x06
+            || data[4] != 0x02
+            || data[5] != 0x00
+            || data[6] != 0x20
+            || data[7] != 0x29
+            || data[8] != LaunchkeyMk3Profile.Model37.DeviceType
+            || data[9] != 0x01
+            || data[10] != 0
+            || data[11] != 0
+            || data[16] != 0xF7
+        )
+        {
+            return false;
+        }
+
+        for (int i = 12; i < 16; i++)
+        {
+            if (data[i] > 9)
+            {
+                return false;
+            }
+        }
+
+        identity = new(
+            "Novation",
+            LaunchkeyMk3Profile.Model37.ModelName,
+            $"{data[12]}.{data[13]}.{data[14]}.{data[15]}"
+        );
+        return true;
+    }
+
+    /// <summary>Sets one LCD row (0 or 1), truncating to 16 characters and replacing non-ASCII with '?'.</summary>
+    public static byte[] SetDisplayRow(int row, string text)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(row);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(row, 1);
+        return DisplayMessage(0x04, (byte)row, text);
+    }
+
+    /// <summary>Sets the LCD parameter name for a zero-based pot index.</summary>
+    public static byte[] SetKnobName(int knob, string text)
+    {
+        return KnobMessage(0x07, knob, text);
+    }
+
+    /// <summary>Sets the LCD parameter value for a zero-based pot index.</summary>
+    public static byte[] SetKnobValue(int knob, string text)
+    {
+        return KnobMessage(0x08, knob, text);
+    }
+
+    /// <summary>Relinquishes the host's default LCD contents.</summary>
+    public static byte[] ClearDisplay()
+    {
+        return [0xF0, 0x00, 0x20, 0x29, 0x02, 0x0F, 0x06, 0xF7];
+    }
+
+    /// <summary>Session pad index is row-major: 0–7 at top, 8–15 at bottom. Color is a palette index.</summary>
+    public static byte[] SetSessionPad(int pad, int color, bool pulse = false)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(pad);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(pad, 15);
+        ArgumentOutOfRangeException.ThrowIfNegative(color);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(color, 127);
+        return
+        [
+            pulse ? (byte)0x92 : (byte)0x90,
+            (byte)(pad < 8 ? 96 + pad : 112 + pad - 8),
+            (byte)color
+        ];
+    }
+
+    private static byte[] KnobMessage(byte command, int knob, string text)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(knob);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(knob, 7);
+        return DisplayMessage(command, (byte)(0x38 + knob), text);
+    }
+
+    private static byte[] DisplayMessage(byte command, byte index, string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int length = Math.Min(text.Length, LaunchkeyMk3Profile.Model37.DisplayWidth);
+        byte[] message = new byte[9 + length];
+        ReadOnlySpan<byte> header = [0xF0, 0x00, 0x20, 0x29, 0x02, 0x0F];
+        header.CopyTo(message);
+        message[6] = command;
+        message[7] = index;
+
+        for (int i = 0; i < length; i++)
+        {
+            message[8 + i] = text[i] is >= ' ' and <= '~' ? (byte)text[i] : (byte)'?';
+        }
+
+        message[^1] = 0xF7;
+        return message;
+    }
+}

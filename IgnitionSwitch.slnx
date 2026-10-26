@@ -1,0 +1,40 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+    <File Path="AGENTS.md" />
+    <File Path="Directory.Build.props" />
+    <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
+    <File Path=".prettycsharp.toml" />
+    <File Path="global.json" />
+    <File Path="LICENSE" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/architecture.md" />
+  </Folder>
+  <Folder Name="/docs/devices/">
+    <File Path="docs/devices/novation_launchkey_mk3_37.md" />
+  </Folder>
+  <Folder Name="/docs/in_memory_engine/">
+    <File Path="docs/in_memory_engine/music_api_coverage.md" />
+  </Folder>
+  <Folder Name="/scripts/">
+    <File Path="scripts/verify.ps1" />
+    <File Path="requirements-dev.txt" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/IgnitionSwitch.App/IgnitionSwitch.App.csproj"><Platform Project="x64" /></Project>
+    <Project Path="src/IgnitionSwitch.Core/IgnitionSwitch.Core.csproj"><Platform Project="x64" /></Project>
+    <Project Path="src/IgnitionSwitch.Midi/IgnitionSwitch.Midi.csproj"><Platform Project="x64" /></Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IgnitionSwitch.App.Tests/IgnitionSwitch.App.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="tests/IgnitionSwitch.Core.Tests/IgnitionSwitch.Core.Tests.csproj"><Platform Project="x64" /></Project>
+    <Project Path="tests/IgnitionSwitch.Midi.Tests/IgnitionSwitch.Midi.Tests.csproj"><Platform Project="x64" /></Project>
+  </Folder>
+</Solution>

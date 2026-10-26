@@ -1,0 +1,16 @@
+# Formatting tools for Python 3.11–3.14 on Windows x64.
+# SHA-256 values are the published PyPI wheel hashes.
+--only-binary=:all:
+--require-hashes
+
+prettycsharp==1.1.10 \
+    --hash=sha256:2d003e2c297cc62aa2afb0a7f353eb5d452980027db1639fa1af5ffd3e6f8419
+defusedxml==0.7.1 \
+    --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
+tree-sitter==0.26.0 \
+    --hash=sha256:0f8793fd18ad7eec276ed4b51c097b4bf2002b357259b66b0d75db1f3f41c754 \
+    --hash=sha256:ca89e361a276dbc934b28a43dd881199e25d34ff5493ee0ce45f3c52a6124a37 \
+    --hash=sha256:93e220cab7e6a823efeb2046c49171427de92ef71c7c681c01820d14d8d3721f \
+    --hash=sha256:a4033fecc8f606c7f2e8b8014d0057b74668a7f0152763606f7bc25c5f9ec64c
+tree-sitter-c-sharp==0.23.5 \
+    --hash=sha256:41a28cfa3d9ea50f5629e44550a03188c8fbd5079803dfc03554b6fd594b33fa

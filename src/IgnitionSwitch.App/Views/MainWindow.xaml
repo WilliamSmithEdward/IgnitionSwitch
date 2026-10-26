@@ -1,0 +1,351 @@
+<Window
+    x:Class="IgnitionSwitch.App.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="IgnitionSwitch">
+    <Grid Background="{StaticResource RootBackground}" RequestedTheme="Dark">
+        <ScrollViewer
+            HorizontalScrollBarVisibility="Auto"
+            HorizontalScrollMode="Auto"
+            VerticalScrollBarVisibility="Auto">
+            <Grid MinWidth="1120" Padding="28,22,28,16" RowSpacing="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid ColumnSpacing="24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                        <Border Width="46" Height="46" Background="#2C241D" CornerRadius="12">
+                            <Path
+                                Width="23"
+                                Height="29"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Data="M 13,0 L 2,17 L 11,17 L 7,29 L 24,10 L 14,10 L 18,0 Z"
+                                Fill="{StaticResource AccentBrush}"
+                                Stretch="Uniform" />
+                        </Border>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="IgnitionSwitch" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource PrimaryText}" />
+                            <TextBlock Text="YOUR IDEAS. IN THE GROOVE." Style="{StaticResource SectionLabelStyle}" FontSize="10" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                            <TextBlock
+                                x:Name="ConnectionText"
+                                Text="Finding your Launchkey…"
+                                VerticalAlignment="Center"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource CyanBrush}"
+                                AutomationProperties.LiveSetting="Polite" />
+                            <Button
+                                x:Name="ReconnectButton"
+                                Content="Reconnect"
+                                Padding="10,4"
+                                FontSize="12"
+                                CornerRadius="7"
+                                AutomationProperties.Name="Reconnect Launchkey" />
+                        </StackPanel>
+                        <TextBlock
+                            x:Name="AudioText"
+                            Text="Preparing audio…"
+                            FontSize="11"
+                            Foreground="{StaticResource MutedText}"
+                            HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="18,14">
+                    <Grid ColumnSpacing="22">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button
+                                x:Name="PlayButton"
+                                Style="{StaticResource ToolbarButtonStyle}"
+                                Background="{StaticResource AccentBrush}"
+                                Foreground="#17130F"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                MinWidth="98"
+                                AutomationProperties.Name="Play or stop loop">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE768;" FontSize="13" />
+                                    <TextBlock Text="Play" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                x:Name="RecordButton"
+                                Style="{StaticResource ToolbarButtonStyle}"
+                                AutomationProperties.Name="Toggle recording">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Ellipse Width="10" Height="10" Fill="#F48694" VerticalAlignment="Center" />
+                                    <TextBlock Text="Record" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                x:Name="StopButton"
+                                Style="{StaticResource ToolbarButtonStyle}"
+                                Width="42"
+                                Padding="0"
+                                ToolTipService.ToolTip="Stop and return to the start"
+                                AutomationProperties.Name="Stop">
+                                <FontIcon Glyph="&#xE71A;" FontSize="13" />
+                            </Button>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Border Width="1" Height="34" Background="{StaticResource BorderBrush}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <NumberBox
+                                    x:Name="TempoBox"
+                                    Width="88"
+                                    Minimum="60"
+                                    Maximum="180"
+                                    Value="108"
+                                    SmallChange="1"
+                                    SpinButtonPlacementMode="Compact"
+                                    AutomationProperties.Name="Tempo in beats per minute" />
+                                <TextBlock Text="BPM" Style="{StaticResource SectionLabelStyle}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ToggleButton
+                                x:Name="MetronomeToggle"
+                                Height="38"
+                                Width="42"
+                                CornerRadius="8"
+                                ToolTipService.ToolTip="Metronome"
+                                AutomationProperties.Name="Toggle metronome">
+                                <FontIcon Glyph="&#xE916;" FontSize="16" />
+                            </ToggleButton>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="MASTER" Style="{StaticResource SectionLabelStyle}" VerticalAlignment="Center" />
+                            <Slider
+                                x:Name="MasterSlider"
+                                Width="126"
+                                Minimum="0"
+                                Maximum="1"
+                                Value="0.65"
+                                StepFrequency="0.01"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Master volume" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button x:Name="OpenButton" Content="Open" Style="{StaticResource ToolbarButtonStyle}" AutomationProperties.Name="Open a saved session" />
+                            <Button x:Name="SaveButton" Content="Save session" Style="{StaticResource ToolbarButtonStyle}" AutomationProperties.Name="Save session" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="2" ColumnSpacing="18" RowSpacing="18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="226" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="230" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Style="{StaticResource CardStyle}" Padding="18">
+                        <Grid RowSpacing="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="YOUR TRACKS" Style="{StaticResource SectionLabelStyle}" />
+                                <TextBlock Text="4 layers" FontSize="11" Foreground="{StaticResource MutedText}" HorizontalAlignment="Right" />
+                            </Grid>
+                            <StackPanel x:Name="TrackPanel" Grid.Row="1" Spacing="8" />
+                            <Grid Grid.Row="2" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton
+                                    x:Name="MuteButton"
+                                    Content="Mute"
+                                    HorizontalAlignment="Stretch"
+                                    CornerRadius="7"
+                                    AutomationProperties.Name="Mute selected track" />
+                                <Button
+                                    x:Name="ClearButton"
+                                    Grid.Column="1"
+                                    Content="Clear"
+                                    HorizontalAlignment="Stretch"
+                                    CornerRadius="7"
+                                    ToolTipService.ToolTip="Clear notes from the selected track"
+                                    AutomationProperties.Name="Clear selected track" />
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="20,18">
+                        <Grid RowSpacing="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="PLAY SOMETHING" Style="{StaticResource SectionLabelStyle}" />
+                                    <TextBlock
+                                        x:Name="SelectedTrackText"
+                                        Text="Keys"
+                                        FontSize="25"
+                                        FontWeight="SemiBold"
+                                        Foreground="{StaticResource PrimaryText}" />
+                                </StackPanel>
+                                <Border
+                                    Background="{StaticResource InsetBackground}"
+                                    CornerRadius="6"
+                                    Padding="9,5"
+                                    VerticalAlignment="Center"
+                                    HorizontalAlignment="Right">
+                                    <TextBlock Text="16 PADS" Style="{StaticResource SectionLabelStyle}" FontSize="9" />
+                                </Border>
+                            </Grid>
+                            <Grid x:Name="PadPanel" Grid.Row="1" Height="164" Margin="-4,0" AutomationProperties.Name="Playable pads" />
+                            <StackPanel Grid.Row="2" Spacing="8">
+                                <Grid>
+                                    <TextBlock Text="FOUR-BAR LOOP" Style="{StaticResource SectionLabelStyle}" FontSize="10" />
+                                    <TextBlock
+                                        x:Name="PositionText"
+                                        Text="Ready · 4 bars"
+                                        FontSize="11"
+                                        Foreground="{StaticResource MutedText}"
+                                        HorizontalAlignment="Right" />
+                                </Grid>
+                                <ProgressBar
+                                    x:Name="LoopProgress"
+                                    Minimum="0"
+                                    Maximum="16"
+                                    Value="0"
+                                    Foreground="{StaticResource AccentBrush}"
+                                    Background="{StaticResource InsetBackground}"
+                                    AutomationProperties.Name="Position within the loop" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="3" Spacing="8">
+                                <TextBlock Text="RECORDED LAYERS" Style="{StaticResource SectionLabelStyle}" FontSize="9" />
+                                <Grid x:Name="TimelinePanel" Height="56" AutomationProperties.Name="Recorded loop notes by track" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="2" Grid.RowSpan="2" Style="{StaticResource CardStyle}" Padding="20">
+                        <StackPanel Spacing="20">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="START HERE" Style="{StaticResource SectionLabelStyle}" Foreground="{StaticResource AccentBrush}" />
+                                <TextBlock Text="Make your&#x0a;first loop." FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource PrimaryText}" LineHeight="29" />
+                                <TextBlock Text="A little idea is all you need." Style="{StaticResource BodyStyle}" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="18">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="25" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="24" Height="24" Background="#352B20" CornerRadius="7" VerticalAlignment="Top">
+                                        <TextBlock Text="1" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="Choose a sound" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource PrimaryText}" />
+                                        <TextBlock Text="Select a track, then play your keys or the pads." Style="{StaticResource BodyStyle}" />
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="25" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="24" Height="24" Background="#352B20" CornerRadius="7" VerticalAlignment="Top">
+                                        <TextBlock Text="2" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="Catch the idea" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource PrimaryText}" />
+                                        <TextBlock Text="Press Record and play. Your four bars repeat automatically." Style="{StaticResource BodyStyle}" />
+                                    </StackPanel>
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="25" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="24" Height="24" Background="#352B20" CornerRadius="7" VerticalAlignment="Top">
+                                        <TextBlock Text="3" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="Build it up" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource PrimaryText}" />
+                                        <TextBlock Text="Choose another track to add a layer. Save when it feels good." Style="{StaticResource BodyStyle}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+
+                            <Border Height="1" Background="{StaticResource BorderBrush}" />
+                            <StackPanel Spacing="9">
+                                <TextBlock Text="MADE FOR YOUR HARDWARE" Style="{StaticResource SectionLabelStyle}" FontSize="9" />
+                                <TextBlock
+                                    x:Name="HelpText"
+                                    Text="Use the hardware Play, Stop and Record buttons to keep your hands on the music."
+                                    Style="{StaticResource BodyStyle}" />
+                            </StackPanel>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="AT YOUR KEYBOARD" Style="{StaticResource SectionLabelStyle}" FontSize="9" />
+                                <TextBlock Text="Space   Play / stop&#x0a;R           Record&#x0a;Esc        Stop" Style="{StaticResource CaptionStyle}" FontFamily="Cascadia Mono, Consolas" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource CardStyle}" Padding="20,16">
+                        <Grid RowSpacing="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <TextBlock Text="TRY THE KEYS" Style="{StaticResource SectionLabelStyle}" FontSize="10" />
+                                <TextBlock Text="Play your controller, or try the keys below." FontSize="11" Foreground="{StaticResource MutedText}" HorizontalAlignment="Right" />
+                            </Grid>
+                            <Grid x:Name="KeyboardPanel" Grid.Row="1" Height="98" AutomationProperties.Name="On-screen musical keyboard" />
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Row="3" ColumnSpacing="20" Margin="2,-4,2,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        x:Name="StatusText"
+                        Text="Ready when you are. Choose a sound and play."
+                        FontSize="12"
+                        Foreground="{StaticResource MutedText}"
+                        TextWrapping="Wrap"
+                        AutomationProperties.LiveSetting="Polite" />
+                    <TextBlock Grid.Column="1" Text="FOUR TRACKS · ONE IDEA" Style="{StaticResource SectionLabelStyle}" FontSize="9" VerticalAlignment="Center" />
+                </Grid>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>

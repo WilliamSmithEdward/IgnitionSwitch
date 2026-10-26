@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+.vs/
+.vscode/
+.idea/
+.tools/
+artifacts/
+TestResults/
+*.user
+*.suo
+*.pfx
+*.cer
+*.ignition.json
+hardware_images/
+__pycache__/
+.venv/
