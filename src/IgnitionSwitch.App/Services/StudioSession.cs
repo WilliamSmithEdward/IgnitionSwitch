@@ -547,7 +547,13 @@ internal sealed partial class StudioSession : IDisposable
     {
         if (Engine.IsPlaying)
         {
-            StopCore();
+            bool wasRecording = Engine.IsRecording;
+            Engine.Pause();
+
+            if (wasRecording)
+            {
+                revision++;
+            }
         }
 
         else

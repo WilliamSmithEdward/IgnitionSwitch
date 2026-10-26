@@ -9,7 +9,8 @@ This is an early working foundation. The Launchkey 37 MK3 comes first; hardware 
 - Four tracks: velvet keys, round bass, soft atmosphere, and synthesized drums.
 - Velocity-sensitive playing, sustain, pitch bend, a metronome, and quantized loop recording.
 - Track gain, mute, master volume, and tempo controls.
-- On-screen keys and sixteen drum pads for trying ideas with or without a controller.
+- A focused loop view and sixteen on-screen drum pads.
+- Play/pause that preserves position, with a separate stop/rewind action.
 - Save and reopen projects as `.ignition.json` files.
 - Launchkey discovery, verified model identification, mapped transport and session controls, pad feedback, and LCD track labels.
 
@@ -21,6 +22,8 @@ Develop on Windows x64 with the .NET SDK selected by [global.json](global.json),
 
 Open **IgnitionSwitch.slnx**. Solution Explorer groups the three application projects under `src` and the three executable check projects under `tests`. Select **IgnitionSwitch.App** as the startup project and **x64** as the platform.
 
+Import [.vsconfig](.vsconfig) through Visual Studio Installer to install the WinUI workload, Windows SDK 26100, and MSVC x64/x86 build tools. With the pinned WinUI SDK, the Visual Studio XAML task discovers MSVC tools even for this C# application. If `GetLatestMSVCVersion` reports a missing `VC\Tools\MSVC` folder, add **MSVC Build Tools for x64/x86** in Individual components, then reopen the solution. The Visual C++ Redistributable alone does not supply those build tools.
+
 From PowerShell in the repository:
 
 ```powershell
@@ -30,15 +33,13 @@ dotnet run --project src/IgnitionSwitch.App -c Release -p:Platform=x64 --no-buil
 
 The Windows App SDK and application dependencies are pinned in the project files and package lock files. The app builds with its Windows App SDK runtime included.
 
-## Make a first loop
+## Play
 
-1. Choose the audio output you want in Windows Sound settings, then launch the app. Connect the Launchkey by USB; use **Reconnect** if it was attached after launch.
-2. Select a track and play the keys. Select Drum mode on the Launchkey to play its drum pads, or use the on-screen pads.
-3. Press **Record** or **R**, play a phrase, then press Record again. Your recorded notes repeat over four bars. Select another track and record another layer.
-4. Use the track sliders and mute control to balance the loop. In the supported hardware Device/Volume pot modes, pots 1–4 adjust track gains, pot 5 adjusts master gain, and pot 6 adjusts tempo.
-5. Choose **Save session** to keep the project. Saving stops recording and finalizes held notes first.
+Connect the Launchkey by USB, select a track, and press **Record** or **R** to capture a phrase. Press Record again to keep it looping; select another track to add a layer. Drum mode plays the drum track, and recording uses a sixteenth-note grid.
 
-**Space** toggles playback and stop; **Esc** stops and rewinds. Recording uses a sixteenth-note grid. The app plays through the computer's Windows default output; the Launchkey sends MIDI and has no sound engine of its own.
+**Space** plays/pauses at the current position; **Esc** stops and rewinds. Pause ends recording and keeps live playing available. Choose **Save** to store the session. Connection/audio details are in **Devices**, and **?** opens shortcut help.
+
+The app uses the Windows default audio output. In the supported hardware Device/Volume pot modes, pots 1–4 adjust track gains, pot 5 adjusts master gain, and pot 6 adjusts tempo. The Launchkey sends MIDI and has no sound engine of its own.
 
 The connected Launchkey's model inquiry and firmware **0.2.1.7** were observed during development. Physical playing, pedal behavior, visible hardware feedback, and audio latency still need a hands-on verification pass. See the [living Launchkey reference](docs/devices/novation_launchkey_mk3_37.md) for exact mappings, evidence, and remaining gaps.
 

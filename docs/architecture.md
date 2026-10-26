@@ -29,13 +29,21 @@ flowchart LR
 
 ## Playing and recording
 
-`WorkstationEngine.Render` fills interleaved stereo floating-point samples at 48 kHz. Musical time advances from rendered audio frames. UI refresh timers display that state; they do not drive the sequencer. Scheduled loop events are ordered when recorded content changes. Live playing works while the transport is stopped.
+`WorkstationEngine.Render` fills interleaved stereo floating-point samples at 48 kHz. Musical time advances from rendered audio frames. UI refresh timers display that state; they do not drive the sequencer. Scheduled loop events are ordered when recorded content changes. Live playing works while the transport is stopped or paused.
+
+Play/pause preserves the transport position. Pausing ends recording, finalizes held recorded durations, and silences sequenced voices and the click while retaining live note/pedal ownership. Resume continues from that position; interrupted loop notes retrigger at their next scheduled onset rather than being reconstructed mid-note. Stop releases everything and rewinds. UI actions and normalized hardware transport commands use the same session behavior.
 
 The initial project schema has four instrument tracks and a sixteen-beat loop. Recorded onsets and durations snap to quarter-beat steps: sixteenth notes in the current four-beat meter. Overdubbing the same pitch at the same grid point replaces that recorded note. Duration can cross the loop boundary. Track mutes/gains and master gain affect the shared mix, which is limited before output.
 
 The engine serializes input, rendering, and state changes. Bounds on voices, recorded events, tempo, and file size keep the initial workload explicit. These are implementation limits, not latency guarantees; a physical audio timing pass remains required.
 
 `AudioPlayback` implements `IAudioPlayback` using NAudio WASAPI shared-mode output on the Windows default playback device. `EngineSampleProvider` adapts the same engine used by tests to the audio callback. A valid output device is needed for audible playback and recording transport.
+
+## Workspace presentation
+
+The WinUI workspace centers transport, track controls, a four-lane loop view, and drum pads. `LoopTimeline` renders the beat/bar grid, recorded note geometry, track selection, and playhead. `InstrumentControls` constructs the track and drum controls. Hardware keys provide melodic performance. Device/audio details and shortcut help appear in flyouts when requested, keeping explanatory text outside the main working area.
+
+Space invokes play/pause, R toggles recording, and Esc stops/rewinds. The stop shortcut remains available while a numeric control has focus. File pickers and confirmations are modal; the session also blocks new hardware notes and commands while continuing to process releases.
 
 ## Session ownership and persistence
 
@@ -55,9 +63,9 @@ All three check projects are dependency-free executable runners:
 
 | Check project | Scope |
 | --- | --- |
-| `IgnitionSwitch.Core.Tests` | Actual rendered sample data, transport timing, note ownership/release, recording, loop boundaries, project validation, and atomic/cancelled saves |
+| `IgnitionSwitch.Core.Tests` | Actual rendered sample data, transport timing and pause/resume, note ownership/release, recording, loop boundaries, project validation, and atomic/cancelled saves |
 | `IgnitionSwitch.Midi.Tests` | Pure input decoding, identity/feedback fixtures, port pairing, and mode-aware command mapping; opens no hardware ports |
-| `IgnitionSwitch.App.Tests` | Production `StudioSession` compiled through source links with fake controller/audio adapters; ownership, sustain, revision saves, modal isolation, feedback, and shutdown |
+| `IgnitionSwitch.App.Tests` | Production `StudioSession` compiled through source links with fake controller/audio adapters; UI/hardware transport equivalence, pause ownership/sustain/revisions, modal isolation, feedback, and shutdown |
 
 The App checks link the coordinator and contracts instead of copying its implementation. They reuse the Core check helper. This exercises the real boundary logic without launching WinUI or requiring an audio device.
 

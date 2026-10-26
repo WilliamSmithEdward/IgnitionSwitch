@@ -21,6 +21,7 @@ internal static class ValidationTests
         Check.Throws<ArgumentOutOfRangeException>(() => engine.Render(new float[2], 0, 4));
         engine.Dispose();
         Check.Throws<ObjectDisposedException>(engine.Play);
+        Check.Throws<ObjectDisposedException>(engine.Pause);
         return Task.CompletedTask;
     }
 

@@ -2,13 +2,13 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <SolidColorBrush x:Key="RootBackground" Color="#10131B" />
-    <SolidColorBrush x:Key="SurfaceBackground" Color="#1A1F2B" />
-    <SolidColorBrush x:Key="InsetBackground" Color="#121722" />
-    <SolidColorBrush x:Key="BorderBrush" Color="#30394A" />
-    <SolidColorBrush x:Key="PrimaryText" Color="#F2F5FC" />
-    <SolidColorBrush x:Key="MutedText" Color="#AAB6CC" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#FFB45A" />
+    <SolidColorBrush x:Key="RootBackground" Color="#101217" />
+    <SolidColorBrush x:Key="SurfaceBackground" Color="#181C24" />
+    <SolidColorBrush x:Key="InsetBackground" Color="#11151D" />
+    <SolidColorBrush x:Key="BorderBrush" Color="#2B3240" />
+    <SolidColorBrush x:Key="PrimaryText" Color="#EDF1F8" />
+    <SolidColorBrush x:Key="MutedText" Color="#9CA8BD" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#FFB05C" />
     <SolidColorBrush x:Key="CyanBrush" Color="#6AD7E1" />
     <SolidColorBrush x:Key="MagentaBrush" Color="#E8A3D5" />
     <SolidColorBrush x:Key="GreenBrush" Color="#9DD9B4" />
@@ -17,15 +17,26 @@
         <Setter Property="Background" Value="{StaticResource SurfaceBackground}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="16" />
-        <Setter Property="Padding" Value="22" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style x:Key="PanelHeadingStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+    </Style>
+
+    <Style x:Key="FlyoutHeadingStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
     </Style>
 
     <Style x:Key="SectionLabelStyle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="CharacterSpacing" Value="140" />
-        <Setter Property="Foreground" Value="{StaticResource MutedText}" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
     </Style>
 
     <Style x:Key="CaptionStyle" TargetType="TextBlock">
@@ -42,14 +53,44 @@
         <Setter Property="LineHeight" Value="20" />
     </Style>
 
+    <Style x:Key="ShortcutKeyStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontFamily" Value="Cascadia Mono" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="QuietButtonStyle" TargetType="Button">
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource MutedText}" />
+    </Style>
+
+    <Style x:Key="IconButtonStyle" TargetType="Button" BasedOn="{StaticResource QuietButtonStyle}">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FontSize" Value="15" />
+    </Style>
+
     <Style x:Key="ToolbarButtonStyle" TargetType="Button">
-        <Setter Property="Height" Value="42" />
+        <Setter Property="Height" Value="40" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Background" Value="{StaticResource InsetBackground}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
         <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+    </Style>
+
+    <Style x:Key="CompactSliderStyle" TargetType="Slider">
+        <Setter Property="Height" Value="28" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="PadButtonStyle" TargetType="Button">
@@ -58,10 +99,10 @@
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Stretch" />
         <Setter Property="Margin" Value="4" />
-        <Setter Property="Padding" Value="14" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Background" Value="#222D3D" />
-        <Setter Property="BorderBrush" Value="#43546D" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="#25222D" />
+        <Setter Property="BorderBrush" Value="#493C4D" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
     </Style>
@@ -69,8 +110,8 @@
     <Style x:Key="TrackButtonStyle" TargetType="Button">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        <Setter Property="Padding" Value="14" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Background" Value="{StaticResource InsetBackground}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />

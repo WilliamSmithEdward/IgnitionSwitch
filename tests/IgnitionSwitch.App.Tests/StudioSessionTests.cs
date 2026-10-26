@@ -2,6 +2,8 @@ using IgnitionSwitch.App.Services;
 using IgnitionSwitch.Core.Domain;
 using IgnitionSwitch.Core.Sequencing;
 using IgnitionSwitch.Midi.Contracts;
+using IgnitionSwitch.Midi.Profiles;
+using IgnitionSwitch.Midi.Protocol;
 
 namespace IgnitionSwitch.App;
 
@@ -110,6 +112,146 @@ internal static class StudioSessionTests
         Check.That(
             Check.Energy(Check.Render(session.Engine, 0.1)) > 1,
             "Performance must resume after the modal transaction ends."
+        );
+    }
+
+    public static void GenericPlaybackPauseResume()
+    {
+        FakeMusicController uiController = new();
+        FakeMusicController hardwareController = new();
+        using StudioSession uiSession = new(
+            uiController,
+            new WorkstationEngine(),
+            new FakeAudioPlayback()
+        );
+        using StudioSession hardwareSession = new(
+            hardwareController,
+            new WorkstationEngine(),
+            new FakeAudioPlayback()
+        );
+        uiSession.Engine.Tempo = 120;
+        hardwareSession.Engine.Tempo = 120;
+        LoopNote loop = new(60, 100, 0, 4);
+        uiSession.Engine.ApplySession(Check.WithNotes(uiSession.Engine, 0, loop));
+        hardwareSession.Engine.ApplySession(Check.WithNotes(hardwareSession.Engine, 0, loop));
+        LaunchkeyControlMapper mapper = new();
+        Check.That(
+            mapper.TryMap(
+                new MidiInputEvent(
+                    MidiInputKind.ControlChange,
+                    LaunchkeyMk3Protocol.ControlChannel,
+                    LaunchkeyMk3Protocol.Play,
+                    127,
+                    false
+                ),
+                out MusicControlEvent? hardwarePlay
+            ),
+            "The mapped hardware Play press must produce a transport command."
+        );
+
+        uiSession.TogglePlayback();
+        hardwareController.EmitControl(hardwarePlay!);
+        Check.That(
+            Check
+                .Render(uiSession.Engine, 0.375)
+                .SequenceEqual(Check.Render(hardwareSession.Engine, 0.375)),
+            "UI and hardware commands must start the same musical playback."
+        );
+        double position = uiSession.Engine.BeatPosition;
+        uiSession.TogglePlayback();
+        hardwareController.EmitControl(hardwarePlay!);
+        Check.That(
+            !uiSession.Engine.IsPlaying && !hardwareSession.Engine.IsPlaying,
+            "Both transport entry points must pause running playback."
+        );
+        Check.Near(
+            position,
+            hardwareSession.Engine.BeatPosition,
+            0,
+            "Both transport entry points must preserve the same position"
+        );
+        Check.That(
+            Check.Energy(Check.Render(uiSession.Engine, 0.1)) == 0
+                && Check.Energy(Check.Render(hardwareSession.Engine, 0.1)) == 0,
+            "Paused sequenced voices must remain silent through either command path."
+        );
+        Check.Near(
+            position,
+            uiSession.Engine.BeatPosition,
+            0,
+            "The UI pause must freeze the clock"
+        );
+        Check.Near(
+            position,
+            hardwareSession.Engine.BeatPosition,
+            0,
+            "The hardware pause must freeze the clock"
+        );
+        uiSession.TogglePlayback();
+        hardwareController.EmitControl(new MusicControlEvent(MusicControlKind.TogglePlayback));
+        _ = Check.Render(uiSession.Engine, 0.125);
+        _ = Check.Render(hardwareSession.Engine, 0.125);
+        Check.Near(
+            position + 0.25,
+            uiSession.Engine.BeatPosition,
+            1e-6,
+            "UI resume must advance from its paused position"
+        );
+        Check.Near(
+            uiSession.Engine.BeatPosition,
+            hardwareSession.Engine.BeatPosition,
+            0,
+            "The generic transport command must resume identically to the UI action"
+        );
+        uiSession.Stop();
+        hardwareController.EmitControl(new MusicControlEvent(MusicControlKind.Stop));
+        Check.Near(0, uiSession.Engine.BeatPosition, 0, "UI Stop must rewind");
+        Check.Near(0, hardwareSession.Engine.BeatPosition, 0, "Hardware Stop must rewind");
+
+        uiSession.Engine.ClearSelectedTrack();
+        uiSession.ToggleRecording();
+        uiController.EmitInput(Control(64, 127));
+        uiController.EmitInput(Note(MidiInputKind.NoteOn, 60, 100));
+        _ = Check.Render(uiSession.Engine, 0.375);
+        long recordingRevision = uiSession.Revision;
+        uiController.EmitControl(hardwarePlay!);
+        Check.That(
+            uiSession.Revision > recordingRevision && !uiSession.Engine.IsRecording,
+            "Pausing recording through the hardware command must mark finalized note data changed."
+        );
+        (SessionSnapshot snapshot, long capturedRevision) = uiSession.CaptureForSave();
+        LoopNote capturedNote = snapshot.Tracks[0].Notes.Single();
+        Check.Near(
+            0.75,
+            capturedNote.Duration,
+            0,
+            "The saved snapshot must contain the duration finalized by pause"
+        );
+        uiSession.MarkSaved(capturedRevision);
+        Check.That(
+            !uiSession.HasChanges,
+            "The finalized paused revision must be independently saveable."
+        );
+        uiController.EmitControl(new MusicControlEvent(MusicControlKind.SelectTrack, 1));
+        uiController.EmitInput(Note(MidiInputKind.NoteOff, 60));
+        uiController.EmitInput(Note(MidiInputKind.NoteOn, 45, 100));
+        uiController.EmitInput(Note(MidiInputKind.NoteOff, 45));
+        Check.That(
+            Check.Energy(Check.Render(uiSession.Engine, 0.1)) > 1,
+            "Pause must preserve the down pedal for original and newly selected live note owners."
+        );
+        uiController.EmitInput(Control(64, 0));
+        _ = Check.Render(uiSession.Engine, 0.2);
+        Check.That(
+            Check.Energy(Check.Render(uiSession.Engine, 0.05)) == 0,
+            "Note-off and pedal-up after pause must release all original owners without stuck voices."
+        );
+        Check.That(
+            uiSession
+                .CaptureForSave()
+                .Snapshot.Tracks[0].Notes.Single()
+                == capturedNote,
+            "Live releases after pause must not extend the finalized recording."
         );
     }
 

@@ -28,28 +28,47 @@ internal static class InstrumentControls
         );
     }
 
-    public static (Button Button, TextBlock Detail, Slider Volume) CreateTrack(
-        TrackState track,
-        int index
-    )
+    public static TrackControls CreateTrack(TrackState track, int index)
     {
         var detail = new TextBlock
         {
             FontSize = 11,
             Opacity = 0.7
         };
-        var content = new StackPanel { Spacing = 5 };
-        content.Children.Add(new TextBlock
+        var content = new Grid
         {
-            Text = $"0{index + 1}  {track.Name}",
+            ColumnSpacing = 8,
+            RowSpacing = 3
+        };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+        content.ColumnDefinitions.Add(new ColumnDefinition());
+        content.RowDefinitions.Add(new RowDefinition());
+        content.RowDefinitions.Add(new RowDefinition());
+        var number = new TextBlock
+        {
+            Text = (index + 1).ToString("00", CultureInfo.InvariantCulture),
+            FontSize = 11,
+            Foreground = Brush(track.ColorHex),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetRowSpan(number, 2);
+        content.Children.Add(number);
+        var name = new TextBlock
+        {
+            Text = track.Name,
             FontSize = 13,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = Brush(track.ColorHex)
-        });
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Grid.SetColumn(name, 1);
+        content.Children.Add(name);
+        Grid.SetRow(detail, 1);
+        Grid.SetColumn(detail, 1);
         content.Children.Add(detail);
         var button = new Button
         {
             Content = content,
+            Height = 60,
             Style = (Style)Application.Current.Resources["TrackButtonStyle"]
         };
         AutomationProperties.SetName(button, $"Select {track.Name}");
@@ -59,10 +78,12 @@ internal static class InstrumentControls
             Maximum = 1,
             StepFrequency = 0.01,
             Value = track.Volume,
-            Margin = new Thickness(10, -5, 10, 2)
+            Height = 26,
+            MinHeight = 26,
+            Margin = new Thickness(34, 0, 12, 0)
         };
         AutomationProperties.SetName(slider, $"{track.Name} volume");
-        return (button, detail, slider);
+        return new TrackControls(button, name, detail, slider);
     }
 
     public static void CreatePads(Grid grid, Action<int, int> noteOn, Action<int, int> noteOff)
@@ -78,107 +99,32 @@ internal static class InstrumentControls
         for (int index = 0; index < 16; index++)
         {
             int note = index + 36;
-            var content = new StackPanel
-            {
-                Spacing = 6,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            content.Children.Add(new TextBlock
-            {
-                Text = (index + 1).ToString("00", CultureInfo.InvariantCulture),
-                FontSize = 10,
-                Opacity = 0.6
-            });
-            content.Children.Add(new TextBlock
+            var content = new TextBlock
             {
                 Text = DrumNames[index],
-                FontSize = 10,
-                TextWrapping = TextWrapping.Wrap
-            });
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center
+            };
             var button = new Button
             {
                 Content = content,
                 Style = (Style)Application.Current.Resources["PadButtonStyle"],
-                Padding = new Thickness(7)
+                Padding = new Thickness(12)
             };
             Grid.SetRow(button, index < 8 ? 1 : 0);
             Grid.SetColumn(button, index % 8);
             AutomationProperties.SetName(button, $"Play {DrumNames[index]}");
             ToolTipService.SetToolTip(button, $"{DrumNames[index]} · MIDI {note}");
-            AttachNotes(button, () => 3, note, noteOn, noteOff);
+            AttachNotes(button, 3, note, noteOn, noteOff);
             grid.Children.Add(button);
         }
     }
 
-    public static void CreateKeyboard(
-        Grid grid,
-        Func<int> selectedTrack,
-        Action<int, int> noteOn,
-        Action<int, int> noteOff
-    )
-    {
-        string[] noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-        var blackKeys = new List<(Button Button, int AfterWhite)>();
-        var overlay = new Canvas
-        {
-            VerticalAlignment = VerticalAlignment.Top,
-            Height = 60
-        };
-        int whiteIndex = -1;
-
-        for (int note = 48; note <= 72; note++)
-        {
-            bool black = note % 12 is 1 or 3 or 6 or 8 or 10;
-            var button = new Button
-            {
-                Content = black ? string.Empty : noteNames[note % 12],
-                Background = Brush(black ? "#252D3D" : "#DFE6F2"),
-                Foreground = Brush("#3F495C"),
-                BorderBrush = Brush("#10131B"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(0, 0, 5, 5),
-                Padding = new Thickness(0, 0, 0, 8),
-                FontSize = 10,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                VerticalContentAlignment = VerticalAlignment.Bottom
-            };
-            AutomationProperties.SetName(button, $"Play {noteNames[note % 12]}{(note / 12) - 1}");
-            AttachNotes(button, selectedTrack, note, noteOn, noteOff);
-
-            if (black)
-            {
-                button.Height = 60;
-                blackKeys.Add((button, whiteIndex));
-                overlay.Children.Add(button);
-            }
-
-            else
-            {
-                whiteIndex++;
-                grid.ColumnDefinitions.Add(new ColumnDefinition());
-                Grid.SetColumn(button, whiteIndex);
-                grid.Children.Add(button);
-            }
-        }
-
-        Grid.SetColumnSpan(overlay, whiteIndex + 1);
-        grid.Children.Add(overlay);
-        grid.SizeChanged += (_, _) =>
-        {
-            double width = grid.ActualWidth / (whiteIndex + 1);
-
-            foreach ((Button button, int afterWhite) in blackKeys)
-            {
-                button.Width = width * 0.62;
-                Canvas.SetLeft(button, ((afterWhite + 1) * width) - (button.Width / 2));
-            }
-        };
-    }
-
     private static void AttachNotes(
         Button button,
-        Func<int> trackSelector,
+        int track,
         int note,
         Action<int, int> noteOn,
         Action<int, int> noteOff
@@ -207,7 +153,7 @@ internal static class InstrumentControls
 
                 Release();
                 pointerClick = true;
-                owner = trackSelector();
+                owner = track;
                 noteOn(owner, note);
                 _ = button.CapturePointer(args.Pointer);
             }), true);
@@ -225,7 +171,6 @@ internal static class InstrumentControls
                 return;
             }
 
-            int track = trackSelector();
             noteOn(track, note);
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
             timer.Tick += (_, _) =>

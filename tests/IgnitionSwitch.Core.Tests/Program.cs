@@ -3,6 +3,10 @@
     ("Playable instruments produce bounded finite stereo audio", AudioTests.Instruments),
     ("Sustain, note ownership, retrigger, and panic release voices", AudioTests.Release),
     ("Transport advances from audio samples and wraps four bars", SequencingTests.Transport),
+    (
+        "Pause freezes time, finalizes recording, and resumes without stranded loop voices",
+        SequencingTests.Pause
+    ),
     ("Recording quantizes, replaces overdubs, and replays", SequencingTests.Recording),
     ("Notes spanning the loop boundary preserve their duration", SequencingTests.WrappingNote),
     ("Track mute, clear, and gain affect playback", SequencingTests.Tracks),

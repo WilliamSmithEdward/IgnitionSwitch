@@ -19,13 +19,16 @@ namespace IgnitionSwitch.App.Views;
 public sealed partial class MainWindow : Window, IDisposable
 {
     private readonly StudioSession session;
+    private readonly LoopTimeline timeline;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(80) };
-    private readonly List<(Button Button, TextBlock Detail, Slider Volume)> trackControls = [];
+    private readonly List<TrackControls> trackControls = [];
     private bool updating;
     private bool closingAllowed;
     private bool dialogOpen;
     private bool disposed;
+    private bool showingAudioError;
     private string timelineKey = string.Empty;
+    private string sessionName = "Untitled";
 
     /// <summary>Creates the workspace and initializes its audio and hardware services on load.</summary>
     public MainWindow()
@@ -37,6 +40,11 @@ public sealed partial class MainWindow : Window, IDisposable
             new AudioPlayback(engine)
         );
         InitializeComponent();
+        timeline = new LoopTimeline(TimelinePanel, index =>
+        {
+            session.SelectTrack(index);
+            RefreshState();
+        });
         BuildInstruments();
         WireControls();
         timer.Tick += (_, _) => RefreshState();
@@ -73,11 +81,10 @@ public sealed partial class MainWindow : Window, IDisposable
         for (int index = 0; index < WorkstationEngine.TrackCount; index++)
         {
             int trackIndex = index;
-            (
-                Button Button,
-                TextBlock Detail,
-                Slider Volume
-            ) controls = InstrumentControls.CreateTrack(session.Engine.Tracks[index], index);
+            TrackControls controls = InstrumentControls.CreateTrack(
+                session.Engine.Tracks[index],
+                index
+            );
             controls.Button.Click += (_, _) =>
             {
                 session.SelectTrack(trackIndex);
@@ -99,21 +106,14 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         InstrumentControls.CreatePads(PadPanel, PreviewNoteOn, PreviewNoteOff);
-        InstrumentControls.CreateKeyboard(
-            KeyboardPanel,
-            () => session.Engine.SelectedTrack,
-            PreviewNoteOn,
-            PreviewNoteOff
-        );
-        TimelinePanel.SizeChanged += (_, _) => DrawTimeline();
     }
 
     private void ResizeWorkspace()
     {
         var display = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
         double scale = Content.XamlRoot.RasterizationScale;
-        int width = Math.Min((int)(1440 * scale), display.WorkArea.Width);
-        int height = Math.Min((int)(960 * scale), display.WorkArea.Height);
+        int width = Math.Min((int)(1360 * scale), display.WorkArea.Width);
+        int height = Math.Min((int)(840 * scale), display.WorkArea.Height);
         AppWindow.MoveAndResize(
             new Windows.Graphics.RectInt32(
                 display.WorkArea.X + ((display.WorkArea.Width - width) / 2),
@@ -189,7 +189,8 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             if (
                 dialogOpen
-                || FocusManager.GetFocusedElement(Content.XamlRoot) is TextBox or NumberBox
+                || (key != VirtualKey.Escape
+                    && FocusManager.GetFocusedElement(Content.XamlRoot) is TextBox or NumberBox)
             )
             {
                 return;
@@ -239,26 +240,41 @@ public sealed partial class MainWindow : Window, IDisposable
         IReadOnlyList<TrackState> tracks = engine.Tracks;
         ConnectionText.Text = session.Controller.Status;
         AudioText.Text = session.Audio.Status;
+        DeviceNameText.Text = session.Controller.Identity?.Model ?? "Devices";
+        DeviceStatusDot.Fill = InstrumentControls.Brush(
+            session.Controller.IsConnected ? "#6AD7E1" : "#9CA8BA"
+        );
+        SessionTitleText.Text = session.HasChanges ? $"{sessionName} · Unsaved" : sessionName;
         PlayButton.IsEnabled = session.Audio.IsRunning;
         RecordButton.IsEnabled = session.Audio.IsRunning;
-        PlayButton.Content = engine.IsPlaying ? "■  Stop" : "▶  Play";
-        RecordButton.Content = engine.IsRecording ? "●  Recording" : "●  Record";
+        PlayIcon.Glyph = engine.IsPlaying ? "\uE769" : "\uE768";
+        PlayLabel.Text = engine.IsPlaying ? "Pause" : "Play";
+        RecordLabel.Text = engine.IsRecording ? "Recording" : "Record";
         TempoBox.Value = engine.Tempo;
         MasterSlider.Value = engine.MasterVolume;
         MetronomeToggle.IsChecked = engine.MetronomeEnabled;
         MuteButton.IsChecked = tracks[engine.SelectedTrack].IsMuted;
         SelectedTrackText.Text = tracks[engine.SelectedTrack].Name;
         LoopProgress.Value = engine.BeatPosition;
-        PositionText.Text = engine.IsPlaying
-            ? $"Bar {(int)(engine.BeatPosition / 4) + 1} · beat {(int)(engine.BeatPosition % 4) + 1}"
-            : "Ready · 4 bars";
+        timeline.UpdatePosition(engine.BeatPosition, engine.IsPlaying);
+        PositionText.Text =
+            $"Bar {(int)(engine.BeatPosition / 4) + 1} · beat {(int)(engine.BeatPosition % 4) + 1}";
 
         for (int index = 0; index < tracks.Count; index++)
         {
             TrackState track = tracks[index];
-            (Button Button, TextBlock Detail, Slider Volume) controls = trackControls[index];
+            TrackControls controls = trackControls[index];
+            controls.Name.Text = track.Name;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+                controls.Button,
+                $"Select {track.Name}"
+            );
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+                controls.Volume,
+                $"{track.Name} volume"
+            );
             controls.Detail.Text =
-                $"{track.NoteCount} notes{(track.IsMuted ? " · muted" : string.Empty)}";
+                $"{track.NoteCount} {(track.NoteCount == 1 ? "note" : "notes")}{(track.IsMuted ? " · muted" : string.Empty)}";
             controls.Button.BorderBrush = InstrumentControls.Brush(
                 index == engine.SelectedTrack ? track.ColorHex : "#30394A"
             );
@@ -267,7 +283,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         Title = session.HasChanges ? "IgnitionSwitch · Unsaved session" : "IgnitionSwitch";
         string key =
-            $"{session.Revision}:{string.Join(',', tracks.Select(track => track.NoteCount))}";
+            $"{session.Revision}:{engine.SelectedTrack}:{string.Join(',', tracks.Select(track => track.NoteCount))}";
 
         if (timelineKey != key)
         {
@@ -276,60 +292,32 @@ public sealed partial class MainWindow : Window, IDisposable
         }
 
         session.RefreshFeedback();
+
+        if (!session.Audio.IsRunning)
+        {
+            StatusText.Text = session.Audio.Status;
+            showingAudioError = true;
+        }
+
+        else if (showingAudioError)
+        {
+            StatusText.Text = string.Empty;
+            showingAudioError = false;
+        }
+
+        StatusText.Visibility = string.IsNullOrEmpty(StatusText.Text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         updating = false;
     }
 
     private void DrawTimeline()
     {
-        TimelinePanel.Children.Clear();
-
-        if (TimelinePanel.ActualWidth <= 0)
-        {
-            return;
-        }
-
-        SessionSnapshot snapshot = session.Engine.CaptureSession();
-
-        for (int track = 0; track < snapshot.Tracks.Count; track++)
-        {
-            var canvas = new Canvas
-            {
-                Height = 11,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, track * 14, 0, 0)
-            };
-            canvas.Children.Add(new Border
-            {
-                Width = TimelinePanel.ActualWidth,
-                Height = 11,
-                Background = InstrumentControls.Brush("#121722"),
-                CornerRadius = new CornerRadius(2)
-            });
-
-            foreach (LoopNote note in snapshot.Tracks[track].Notes)
-            {
-                double left = note.Beat / 16 * TimelinePanel.ActualWidth;
-                double width = Math.Max(
-                    2,
-                    Math.Min(
-                        note.Duration / 16 * TimelinePanel.ActualWidth,
-                        TimelinePanel.ActualWidth - left
-                    )
-                );
-                var mark = new Border
-                {
-                    Width = width,
-                    Height = 7,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    Background = InstrumentControls.Brush(session.Engine.Tracks[track].ColorHex),
-                    CornerRadius = new CornerRadius(2)
-                };
-                Canvas.SetLeft(mark, left);
-                canvas.Children.Add(mark);
-            }
-
-            TimelinePanel.Children.Add(canvas);
-        }
+        timeline.Render(
+            session.Engine.CaptureSession(),
+            session.Engine.Tracks,
+            session.Engine.SelectedTrack
+        );
     }
 
     private async Task ClearTrackAsync()
@@ -349,7 +337,7 @@ public sealed partial class MainWindow : Window, IDisposable
             session.Engine.ClearSelectedTrack();
             session.MarkChanged();
             timelineKey = string.Empty;
-            StatusText.Text = "Track cleared. Play a new idea when you're ready.";
+            StatusText.Text = "Track cleared.";
             RefreshState();
         }
     }
@@ -368,7 +356,7 @@ public sealed partial class MainWindow : Window, IDisposable
         {
             var picker = new FileSavePicker
             {
-                SuggestedFileName = "My first loop.ignition.json",
+                SuggestedFileName = $"{sessionName}.ignition.json",
                 SuggestedStartLocation = PickerLocationId.MusicLibrary
             };
             picker.FileTypeChoices.Add("IgnitionSwitch session", [".json"]);
@@ -383,6 +371,7 @@ public sealed partial class MainWindow : Window, IDisposable
             (SessionSnapshot Snapshot, long Revision) = session.CaptureForSave();
             await SessionStore.SaveAsync(file.Path, Snapshot);
             session.MarkSaved(Revision);
+            SetSessionName(file.Name);
             StatusText.Text = $"Saved · {file.Name}";
             return true;
         }
@@ -440,6 +429,7 @@ public sealed partial class MainWindow : Window, IDisposable
             SessionSnapshot snapshot = await SessionStore.LoadAsync(file.Path);
             session.Engine.ApplySession(snapshot);
             session.MarkSaved();
+            SetSessionName(file.Name);
             timelineKey = string.Empty;
             StatusText.Text = $"Opened · {file.Name}";
         }
@@ -498,6 +488,14 @@ public sealed partial class MainWindow : Window, IDisposable
             picker,
             WinRT.Interop.WindowNative.GetWindowHandle(this)
         );
+    }
+
+    private void SetSessionName(string filename)
+    {
+        const string extension = ".ignition.json";
+        sessionName = filename.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
+            ? filename[..^extension.Length]
+            : Path.GetFileNameWithoutExtension(filename);
     }
 
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)

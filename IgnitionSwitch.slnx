@@ -8,6 +8,7 @@
     <File Path="Directory.Build.props" />
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
+    <File Path=".vsconfig" />
     <File Path=".prettycsharp.toml" />
     <File Path="global.json" />
     <File Path="LICENSE" />

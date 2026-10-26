@@ -12,17 +12,24 @@ Launchkey is a MIDI controller: its USB and DIN messages contain performance/con
 
 Published physical specifications for the 37-key MK3 are 555 × 258 × 77 mm (width × depth × height, including pots), 62 mm high excluding pots, and 2.7 kg in the V6 manual. The supplied connection is USB Type A to Type B. [User Guide V6, physical characteristics and connection diagrams](https://fael-downloads-prod.focusrite.com/customer/prod/downloads/Launchkey%20MK3%20User%20Guide%20v6%20-%20EN.pdf#page=54)
 
-## Current physical evidence
+## Observed device and application evidence
+
+The following observations come from development smoke tests on 2026-10-26. The virtual-keyboard interaction was exercised in an earlier development layout, before the requested workspace refinement. It remains evidence for the recording path and does not imply a permanent on-screen piano in the workspace.
 
 | Observation | Evidence as of 2026-10-26 |
 | --- | --- |
 | Windows sees the connected unit | The development machine exposed a Launchkey device; generic PnP naming alone was not used as model identification. |
 | Application discovery and model verification | A launched WinUI application reported `Launchkey 37 MK3 connected · firmware 0.2.1.7 · keys and controls ready`. The connection path opened both performance and control pairs and accepted the expected Novation model inquiry reply. |
 | Firmware of William's connected unit | **0.2.1.7**, as formatted from the four application-version bytes in that reply. This is an observation, not a claim that this is Novation's latest firmware. |
+| Recording through the running WinUI application | The earlier on-screen keyboard recorded one melodic note, and an on-screen drum pad recorded one drum note on a separate track in the four-bar loop. This exercised application input, recording and track separation; it did not exercise physical Launchkey keys or pads. |
+| Audio-output recovery | The audio output was disconnected during the running-app test and then reconnected. The application recovered its output without a manual reconnect action. This was an audio-device recovery test, not a Launchkey USB unplug test. |
+| Signal in the application's actual Windows render session | After the default physical output was reconnected, Windows WASAPI metering for the running **IgnitionSwitch process's own render session** was active and reported a nonzero peak of about **0.07** during a **12-second** observation. This establishes signal flow into that render session; it is not a human listening test or a latency measurement. |
+| Native Save As interaction | The Windows Save As dialog opened with the corrected JSON file filter and a suggested filename ending `.ignition.json`; Cancel worked. Completing a native save and reopening that saved file remain manual checks because automation did not expose the picker host. |
+| Pause and reset semantics | Hardware-independent core checks passed (10/10 groups in the confirmed run): Pause preserves the beat and live held-note/sustain state; Stop rewinds. This verifies engine behavior, not a physical press of the Launchkey transport buttons. |
 | Keys/pads/pots played by a human | Not yet recorded as a completed physical test. |
 | Actual pad colors/LCD rendering | Feedback packets are implemented and tested against documented bytes; a visual hardware pass is still required. |
 | Audio latency and device timing | No measured hardware latency or timing benchmark yet. |
-| Unplug/reconnect and port contention | Teardown and removal handling are implemented; a physical unplug/replug and another-app contention test remains required. |
+| Launchkey USB unplug/reconnect and MIDI-port contention | Teardown and removal handling are implemented; a physical controller unplug/replug and another-app MIDI contention test remains required. The successful audio-output recovery above does not establish either result. |
 
 Do not publish endpoint IDs, container IDs, unique serial numbers, or raw photos merely to demonstrate discovery. None are needed in this reference.
 
@@ -44,7 +51,7 @@ The keyboard can also be powered without a computer using the supply specified i
 
 ## Physical controls and current application support
 
-Statuses below describe code currently present. Except for the identity/connection observation above, the mappings still require a physical playing pass.
+Statuses below describe code currently present. The identity/connection and application recording evidence above do not replace a physical playing pass for the hardware mappings.
 
 | Control | Current IgnitionSwitch behavior | Remaining work |
 | --- | --- | --- |
@@ -63,8 +70,8 @@ Statuses below describe code currently present. Except for the identity/connecti
 | Device/Volume pot modes | The six mappings above are enabled. Device mode is selected on connection. | A richer device parameter page may replace this initial mapping later. |
 | Pan/Send pot modes | Ignored by the application mapper. | Pan/send processing and matching feedback. |
 | Track left/right | Move selected track one step, clamped to the four-track range. | Banking if track capacity expands. |
-| Play | Toggle project playback. | Verify tactile behavior with a user. |
-| Stop | Stop playback/recording and release held notes. | Verify with sustained notes and active recording. |
+| Play | Start, pause, or resume project playback; pausing preserves the transport position. | Verify the physical button and its interaction with held notes/recording. |
+| Stop | Stop playback/recording, release held notes, and rewind the loop transport. | Verify with sustained notes and active recording. |
 | Record | Toggle loop recording when audio is running. | Physical overdub review. |
 | Click | Toggle the application metronome. | Physical confirmation. |
 | Loop | No button command yet; the engine currently uses a fixed four-bar loop. | An explicit loop behavior/UI and button mapping. |
@@ -82,6 +89,8 @@ Statuses below describe code currently present. Except for the identity/connecti
 
 The selected track uses blue session feedback, changing to red while recording; other existing tracks use a different steady palette color. Lower pads use green for audible and red for muted. Empty columns are off. The LCD shows the selected track and Ready/Playing/Recording. Returning from another pad layout to Session repaints cached application feedback without forcing the player's mode selection. LEDs are steady because project-to-hardware MIDI-clock synchronization is not implemented.
 
+Play pauses a running transport and resumes from that position on the next press. Pause ends an active recording and silences sequenced voices and the click, while preserving live held-note and sustain state. Resume waits for the next scheduled note onset instead of reconstructing a sequenced note interrupted by Pause. Stop ends recording, releases notes/sustain, and rewinds to the start. The current feedback contract has no separate paused flag, so the hardware LCD uses Ready when the transport is paused; an explicit Paused LCD state remains a feedback improvement.
+
 Transport buttons such as Play, Stop, Record, Loop, Capture MIDI, Quantise, Click and Undo have no host-controllable LED to illuminate. A dark Play button is not a connection failure. Host parameter names are assigned to the eight pots; current-value text is not yet synchronized, so native raw 0–127 values may appear. [Programmer's Reference V1, surface coloring and LCD sections](https://fael-downloads-prod.focusrite.com/customer/prod/downloads/launchkey_mk3_programmer_s_reference_guide_v1_en.pdf#page=10)
 
 ## MIDI conventions and exact application assignments
@@ -97,7 +106,7 @@ Human MIDI channels are **1–16**. The C# contracts use **0–15**. This differ
 | Pot CC25 | 16 / 15 | Master gain `value / 127`. |
 | Pot CC26 | 16 / 15 | Tempo `60 + round(value × 120 / 127)` BPM. |
 | Track CC102 / CC103 | 16 / 15 | Selection offset −1 / +1. |
-| Play/Stop/Record CC115/116/117 | 16 / 15 | Playback toggle / stop / recording toggle on press. |
+| Play/Stop/Record CC115/116/117 | 16 / 15 | Start/pause/resume toggle / stop and rewind / recording toggle on press. |
 | Click CC76 | 16 / 15 | Metronome toggle on press. |
 | Session notes 96–99 | 1 / 0, control port | Select track index `note - 96`. |
 | Session notes 112–115 | 1 / 0, control port | Toggle mute at index `note - 112`. |
@@ -286,7 +295,7 @@ Easy Start can expose a Novation onboarding USB drive. That drive is not a MIDI 
 
 Run `dotnet run --project tests/IgnitionSwitch.Midi.Tests --no-restore` after the project has been restored. These checks do not open MIDI ports. The initial library/tests passed strict .NET builds with zero diagnostics; rerun verification after relevant changes.
 
-Next physical evidence should cover each key/wheel/pedal, every mapped session pad/pot/button, mode changes and returning to Session, native scale/chord/arp/strum output, simultaneous notes across track changes, sustain/retrigger collisions, mute feedback and LCD priorities, USB removal/reconnection, and port contention. Record the actual device firmware, app revision and outcome without including unique device identifiers. Timing/latency claims require measurements through the chosen audio output.
+Next physical evidence should cover each key/wheel/pedal, every mapped session pad/pot/button, mode changes and returning to Session, native scale/chord/arp/strum output, simultaneous notes across track changes, sustain/retrigger collisions, mute feedback and LCD priorities, Launchkey USB removal/reconnection, and MIDI-port contention. Native Save As completion/reopening, human listening and timing measurements remain separate checks. Record the actual device firmware, app revision and outcome without including unique device identifiers. Timing/latency claims require measurements through the chosen audio output.
 
 The seven original HEIC references remain local under `F:\GitHub\IgnitionSwitch\hardware_images` (`IMG_0960(2)` through `IMG_0966(1)` filenames). The folder is gitignored. Photos are visual references, not a protocol source; add reviewed, privacy-safe diagrams only if the project needs a public hardware illustration.
 

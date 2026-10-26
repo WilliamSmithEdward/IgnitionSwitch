@@ -196,13 +196,31 @@ public sealed class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Starts loop playback; live instruments are playable while stopped.</summary>
+    /// <summary>Starts or resumes loop playback; live instruments are playable while paused or stopped.</summary>
     public void Play()
     {
         lock (_sync)
         {
             ThrowIfDisposed();
             _isPlaying = true;
+        }
+    }
+
+    /// <summary>Ends recording and silences sequenced voices while preserving the transport position.</summary>
+    /// <remarks>
+    /// Held live notes and sustain remain playable. Resume does not restart interrupted sequenced notes;
+    /// they retrigger at their next scheduled loop onset, including notes spanning the loop boundary.
+    /// </remarks>
+    public void Pause()
+    {
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            FinalizeHeldRecordings();
+            _isPlaying = false;
+            _isRecording = false;
+            _clickSamples = 0;
+            _ = _voices.RemoveAll(voice => voice.IsLoop);
         }
     }
 
@@ -229,7 +247,7 @@ public sealed class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Starts playback or stops and rewinds it.</summary>
+    /// <summary>Pauses running playback or resumes it from the preserved transport position.</summary>
     public void TogglePlayback()
     {
         lock (_sync)
@@ -238,12 +256,12 @@ public sealed class WorkstationEngine : IDisposable
 
             if (_isPlaying)
             {
-                Stop();
+                Pause();
             }
 
             else
             {
-                _isPlaying = true;
+                Play();
             }
         }
     }

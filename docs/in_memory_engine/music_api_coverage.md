@@ -1,6 +1,6 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, initial implementation. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, pause/resume transport update. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
@@ -16,10 +16,10 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 | `Domain.TrackSnapshot` | 0 | 1 | 5 | 7 |
 | `Domain.TrackState` | 0 | 1 | 6 | 8 |
 | `Persistence.SessionStore` | 1 | 2 | 0 | 4 |
-| `Sequencing.WorkstationEngine` | 3 | 19 | 10 | 33 |
-| **Total: 7 types** | **8** | **25** | **30** | **70** |
+| `Sequencing.WorkstationEngine` | 3 | 20 | 10 | 34 |
+| **Total: 7 types** | **8** | **26** | **30** | **71** |
 
-`WorkstationEngine` therefore declares **32 non-type members**: 19 method overloads, 10 properties, and 3 constants. The full documented Core API has 63 non-type entries plus 7 type entries.
+`WorkstationEngine` therefore declares **33 non-type members**: 20 method overloads, 10 properties, and 3 constants. The full documented Core API has 64 non-type entries plus 7 type entries.
 
 ## Implemented behavior and evidence
 
@@ -30,7 +30,8 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 | Built-in instruments | Implemented; keys, bass, atmosphere, synthesized drums, velocity, 64-voice limit | `AudioTests.Instruments`: each track produces nonzero finite samples; dense input stays bounded; channels align | Musical/physical listening review; richer presets and effects |
 | Note ownership and release | Implemented; selected/explicit-track note methods, sustain, retrigger, velocity-zero release, immediate all-notes-off | `AudioTests.Release`; `StudioSessionTests.Ownership`, `.Sustain` | Physical pedal polarity, rapid scale/chord collisions, simultaneous input sources |
 | Pitch bend | Implemented; normalized −1…1 maps to ±2 semitones for melodic voices | `ValidationTests.Controls` rejects invalid bend; formula in `SynthVoice`/`WorkstationEngine` | A frequency-response assertion and physical wheel pass; recorded bend automation |
-| Transport and metronome | Implemented; sample-clock playback, stop/rewind, four bars, tempo 60–180 BPM, beat position, click | `SequencingTests.Transport`: stopped clock, exact frame-based advancement, loop wrap, reset, metronome samples | Variable meter/length, pause/resume, external clock, measured timing |
+| Transport and metronome | Implemented; sample-clock playback, pause/resume, stop/rewind, four bars, tempo 60–180 BPM, beat position, click | `SequencingTests.Transport`: stopped clock, exact frame-based advancement, loop wrap, reset, metronome samples; `SequencingTests.Pause`: frozen clock, precise resume, pending boundary onset, stop rewind | Variable meter/length, external clock, measured timing |
+| Pause voice/recording policy | Implemented; pause finalizes held recorded durations, disables recording, clears sequenced voices/click, and preserves live playing/sustain. Resume does not chase interrupted loop notes; they retrigger at their next scheduled onset | `SequencingTests.Pause`: live note survives pause and accepts note-off, finalized duration remains unchanged, wrapped note is silent until its next onset and then releases correctly; `StudioSessionTests.GenericPlaybackPauseResume`: UI/mapped hardware equivalence, retained owners/pedal, saved pause revision | Recorded expression automation and broader physical transport/playing combinations |
 | Loop recording and overdub | Implemented; sixteenth-note onset/duration grid, four-track layering, same-grid/pitch replacement | `SequencingTests.Recording`: quantization, replacement/replay, first-beat drum deduplication, superseded voice release | Undo/history, retrospective capture, editable note grid |
 | Loop-boundary duration | Implemented; note durations can extend across loop wrap | `SequencingTests.WrappingNote` checks sound across the boundary and scheduled release | Broader stress/timing measurements |
 | Mixer and clear | Implemented; per-track mute/gain, master gain, selected-track clearing | `SequencingTests.Tracks`; finite-output assertions in `AudioTests.Instruments` | Pan, sends, effect processing, solo, automation |
@@ -42,19 +43,21 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 
 ## Test inventory and physical evidence
 
-The executable runners currently define **9 Core groups**, **7 MIDI groups**, and **6 App groups**. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
+The executable runners currently define **10 Core groups**, **7 MIDI groups**, and **7 App groups**: **24 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
 
 ```powershell
 .\scripts\verify.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-On **2026-10-26**, the complete verification script passed locally in Release/x64: **22/22 groups**, a build with **zero warnings and errors**, the pinned prettyCSharp check, and style/analyzer checks including informational diagnostics. This does not establish physical audio quality or complete hardware coverage.
+The integrated workspace and pause/resume update passed the full local verification script in Release/x64 on **2026-10-26**: **24/24 groups**, a build with **zero warnings/errors**, pinned prettyCSharp, and style/analyzer checks including informational diagnostics. Isolated build outputs preserved the running development session. The refined layout still needs its final visual pass; automated checks do not establish physical audio quality or complete hardware coverage.
 
 The local formatter runtime is Python 3.12. GitHub CI pins Python **3.13.17**, whose Windows x64 artifact is listed in the Actions runtime manifest. This tooling pin does not change the API inventory or supported music behavior.
 
 The Core runner checks actual rendered buffers, musical state, and files. The MIDI runner uses pure protocol fixtures and malformed-input cases without opening ports. The App runner compiles the production coordinator with fake boundary adapters. An individual suite passing does not replace the full verification script after a change.
 
-The launched app has observed the connected **Launchkey 37 MK3**, firmware **0.2.1.7**, through its identity handshake. Human-operated keys/buttons/pedal, actual LED/LCD appearance, audible playback through a selected physical output, and latency have not yet been recorded as completed physical checks. A working Windows default output is required for that pass. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
+The launched app has observed the connected **Launchkey 37 MK3**, firmware **0.2.1.7**, through its identity handshake. A UI-driven session recorded one keyboard note and one drum-pad hit into the four-bar loop. After restoring a Windows default physical output, the app recovered playback; its process-specific WASAPI session meter showed active, nonzero output, reaching approximately **0.07** over a **12-second** observation window. This is output-path evidence, not a latency measurement or a human listening assessment.
+
+Human-operated hardware keys/buttons/pedal, actual LED/LCD appearance, subjective audible quality, and latency have not yet been recorded as completed physical checks. A working Windows default output is required for that pass. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
 
 ## Initial limits and unimplemented areas
 

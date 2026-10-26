@@ -85,6 +85,143 @@ internal static class SequencingTests
         return Task.CompletedTask;
     }
 
+    public static Task Pause()
+    {
+        using (WorkstationEngine engine = new()
+        {
+            Tempo = 120,
+            MetronomeEnabled = true
+        })
+        {
+            engine.ApplySession(
+                Check.WithNotes(
+                    engine,
+                    0,
+                    new LoopNote(60, 100, 0, 4),
+                    new LoopNote(67, 100, 1, 0.25)
+                )
+            );
+            engine.Play();
+            _ = Check.Render(engine, 0.5);
+            double position = engine.BeatPosition;
+            engine.TogglePlayback();
+            Check.That(
+                !engine.IsPlaying && !engine.IsRecording,
+                "Playback toggle must pause the transport."
+            );
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.2)) == 0,
+                "Pause must immediately silence sequenced notes and metronome tails."
+            );
+            Check.Near(
+                position,
+                engine.BeatPosition,
+                0,
+                "Rendering while paused must preserve the exact clock position"
+            );
+            engine.MetronomeEnabled = false;
+            engine.TogglePlayback();
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.1)) > 1,
+                "A pending onset at the resume boundary must still play."
+            );
+            Check.Near(
+                (position + 0.2) % 16,
+                engine.BeatPosition,
+                1e-6,
+                "Playback must resume from the preserved position"
+            );
+            _ = Check.Render(engine, 0.3);
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.05)) == 0,
+                "Interrupted loop notes must not be restarted or left sounding on resume."
+            );
+            engine.Stop();
+            Check.Near(0, engine.BeatPosition, 0, "Stop after resume must rewind");
+        }
+
+        using (WorkstationEngine engine = new() { Tempo = 120 })
+        {
+            engine.ToggleRecording();
+            engine.NoteOn(0, 60, 100);
+            _ = Check.Render(engine, 0.375);
+            engine.Pause();
+            double position = engine.BeatPosition;
+            LoopNote captured = engine
+                .CaptureSession()
+                .Tracks[0].Notes.Single();
+            Check.Near(
+                0.75,
+                captured.Duration,
+                0,
+                "Pause must finalize the held recorded duration"
+            );
+            Check.That(
+                !engine.IsRecording && !engine.IsPlaying,
+                "Pause must end recording without rewinding."
+            );
+            engine.Pause();
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.1)) > 1,
+                "A live held note must remain playable after recording is paused."
+            );
+            engine.NoteOff(0, 60);
+            _ = Check.Render(engine, 0.2);
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.05)) == 0,
+                "A held live note must still accept note-off while paused."
+            );
+            Check.Near(
+                position,
+                engine.BeatPosition,
+                0,
+                "Repeated pause and live rendering must keep time frozen"
+            );
+            Check.That(
+                engine
+                    .CaptureSession()
+                    .Tracks[0].Notes.Single()
+                    == captured,
+                "The later live note-off must not extend or duplicate the paused recording."
+            );
+            engine.Play();
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.1)) == 0,
+                "A finalized note whose onset is before the resume position must not be chased."
+            );
+            engine.Stop();
+        }
+
+        using (WorkstationEngine engine = new() { Tempo = 120 })
+        {
+            engine.ApplySession(Check.WithNotes(engine, 0, new LoopNote(60, 100, 15.75, 0.5)));
+            engine.Play();
+            _ = Check.Render(engine, 8.05);
+            engine.Pause();
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.1)) == 0,
+                "Pause must silence a sequenced note sustained across the loop boundary."
+            );
+            engine.Play();
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.3)) == 0,
+                "Resuming a wrapped note must not strand its previous voice."
+            );
+            _ = Check.Render(engine, 7.5);
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.1)) > 1,
+                "An interrupted wrapped note must retrigger at its next loop onset."
+            );
+            _ = Check.Render(engine, 0.5);
+            Check.That(
+                Check.Energy(Check.Render(engine, 0.1)) == 0,
+                "A retriggered wrapped note must retain its scheduled release."
+            );
+        }
+
+        return Task.CompletedTask;
+    }
+
     public static Task WrappingNote()
     {
         using WorkstationEngine engine = new() { Tempo = 120 };

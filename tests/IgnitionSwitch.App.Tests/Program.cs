@@ -11,6 +11,10 @@ using IgnitionSwitch.App;
         StudioSessionTests.Sustain
     ),
     (
+        "UI and normalized hardware transport pause/resume equally without losing note or pedal ownership",
+        StudioSessionTests.GenericPlaybackPauseResume
+    ),
+    (
         "Modal transactions finalize recording and block new hardware mutations",
         StudioSessionTests.ModalIsolation
     ),

@@ -8,6 +8,7 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WindowsPackageType>None</WindowsPackageType>
