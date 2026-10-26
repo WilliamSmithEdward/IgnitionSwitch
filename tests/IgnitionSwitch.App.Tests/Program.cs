@@ -3,6 +3,10 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Loop commands preserve modal, recording, live ownership, save, and terminal behavior",
+        LoopCommandTests.Commands
+    ),
+    (
         "Hardware and UI Quantise share undo, revision, and modal behavior",
         QuantizeCommandTests.Commands
     ),

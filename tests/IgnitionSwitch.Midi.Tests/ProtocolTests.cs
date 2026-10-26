@@ -1,4 +1,5 @@
 using IgnitionSwitch.Midi.Contracts;
+using IgnitionSwitch.Midi.Profiles;
 using IgnitionSwitch.Midi.Protocol;
 
 internal static class ProtocolTests
@@ -192,6 +193,48 @@ internal static class ProtocolTests
         );
         Check.Throws<ArgumentOutOfRangeException>(
             () => LaunchkeyMk3Protocol.SetKnobName(8, "Test")
+        );
+        LoopFeedback();
+    }
+
+    private static void LoopFeedback()
+    {
+        var looping = new ControllerFeedback(0, true, false, ["Keys"], [false]);
+        Check.That(looping.LoopEnabled, "Five-argument feedback must retain looping by default.");
+        ControllerFeedback once = looping with { LoopEnabled = false };
+        Check.That(
+            !LaunchkeyFeedbackPresentation.HasSameState(looping, once),
+            "A loop-policy change alone must invalidate cached hardware feedback."
+        );
+        Check.That(
+            LaunchkeyFeedbackPresentation.HasSameState(
+                looping,
+                looping with
+                {
+                    TrackNames = looping.TrackNames.ToArray(),
+                    TrackMuted = looping.TrackMuted.ToArray()
+                }
+            ),
+            "Detached snapshots with equal content must not force a hardware repaint."
+        );
+        Check.That(
+            LaunchkeyFeedbackPresentation.TransportText(looping) == "Looping"
+                && LaunchkeyFeedbackPresentation.TransportText(once) == "Playing once",
+            "The LCD must distinguish repeating playback from one-pass playback."
+        );
+        Check.That(
+            LaunchkeyFeedbackPresentation.TransportText(looping with { Recording = true })
+                == "Recording"
+                && LaunchkeyFeedbackPresentation.TransportText(once with { Recording = true })
+                    == "Recording",
+            "Recording feedback must take priority over either loop policy."
+        );
+        Check.That(
+            LaunchkeyFeedbackPresentation.TransportText(looping with { Playing = false })
+                == "Loop ready"
+                && LaunchkeyFeedbackPresentation.TransportText(once with { Playing = false })
+                    == "One pass ready",
+            "Stopped hardware feedback must confirm the selected playback policy without a Loop LED."
         );
     }
 }

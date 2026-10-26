@@ -166,6 +166,47 @@ internal sealed partial class StudioSession : IDisposable
         }
     }
 
+    public bool LoopEnabled
+    {
+        get
+        {
+            lock (inputLock)
+            {
+                return Engine.LoopEnabled;
+            }
+        }
+
+        set
+        {
+            lock (inputLock)
+            {
+                if (disposed || interactionBlocked)
+                {
+                    return;
+                }
+
+                Engine.LoopEnabled = value;
+            }
+
+            RefreshFeedback();
+        }
+    }
+
+    public void ToggleLoop()
+    {
+        lock (inputLock)
+        {
+            if (disposed || interactionBlocked)
+            {
+                return;
+            }
+
+            Engine.LoopEnabled = !Engine.LoopEnabled;
+        }
+
+        RefreshFeedback();
+    }
+
     public void Start()
     {
         lock (inputLock)
@@ -204,9 +245,8 @@ internal sealed partial class StudioSession : IDisposable
         {
             ObjectDisposedException.ThrowIf(disposed, this);
 
-            if (Engine.IsRecording)
+            if (Engine.EndRecording())
             {
-                Engine.ToggleRecording();
                 revision++;
             }
 
@@ -392,7 +432,8 @@ internal sealed partial class StudioSession : IDisposable
                     tracks
                         .Select(track => track.IsMuted)
                         .ToArray()
-                )
+                ),
+                Engine.LoopEnabled
             );
 
             if (
@@ -400,6 +441,7 @@ internal sealed partial class StudioSession : IDisposable
                 && previous.SelectedTrack == feedback.SelectedTrack
                 && previous.Playing == feedback.Playing
                 && previous.Recording == feedback.Recording
+                && previous.LoopEnabled == feedback.LoopEnabled
                 && previous.TrackNames.SequenceEqual(feedback.TrackNames)
                 && previous.TrackMuted.SequenceEqual(feedback.TrackMuted)
             )
@@ -585,6 +627,10 @@ internal sealed partial class StudioSession : IDisposable
     {
         switch (control.Kind)
         {
+            case MusicControlKind.ToggleLoop:
+                Engine.LoopEnabled = !Engine.LoopEnabled;
+                break;
+
             case MusicControlKind.QuantizeSelectedTrack:
                 _ = QuantizeSelectedTrackCore();
                 break;

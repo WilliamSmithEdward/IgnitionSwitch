@@ -123,7 +123,7 @@ internal sealed class LoopTimeline
     public void UpdatePosition(double beat, bool playing)
     {
         position = beat;
-        Canvas.SetLeft(playhead, LabelWidth + (beat / beats * Math.Max(0, width - LabelWidth)));
+        ArrangePlayhead();
         playhead.Opacity = playing ? 1 : 0.45;
     }
 
@@ -219,7 +219,14 @@ internal sealed class LoopTimeline
 
         playhead.Height = height - RulerHeight;
         Canvas.SetTop(playhead, RulerHeight);
-        Canvas.SetLeft(playhead, LabelWidth + (position / beats * gridWidth));
+        ArrangePlayhead();
+    }
+
+    private void ArrangePlayhead()
+    {
+        double gridWidth = Math.Max(0, width - LabelWidth);
+        double left = LabelWidth + (Math.Clamp(position, 0, beats) / beats * gridWidth);
+        Canvas.SetLeft(playhead, Math.Min(Math.Max(0, width - playhead.Width), left));
     }
 
     private void ArrangeNote(int index, LoopNote note, NoteVisual visual)

@@ -1,6 +1,6 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, selected-track Quantise and optional recording-grid milestone. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, repeat/single-pass Loop transport milestone. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
@@ -16,10 +16,10 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 | `Domain.TrackSnapshot` | 0 | 1 | 5 | 7 |
 | `Domain.TrackState` | 0 | 1 | 6 | 8 |
 | `Persistence.SessionStore` | 1 | 2 | 0 | 4 |
-| `Sequencing.WorkstationEngine` | 3 | 24 | 14 | 42 |
-| **Total: 7 types** | **8** | **30** | **34** | **79** |
+| `Sequencing.WorkstationEngine` | 3 | 25 | 15 | 44 |
+| **Total: 7 types** | **8** | **31** | **35** | **81** |
 
-`WorkstationEngine` therefore declares **41 non-type members**: 24 method overloads, 14 properties, and 3 constants. The full documented Core API has 72 non-type entries plus 7 type entries. `NoteRevision` tracks recorded note-content changes independently of mixer and transport state. The history API adds `CanUndo`, `CanRedo`, `Undo()`, `Redo()` and `CommitEdit()`. Quantization adds `RecordingQuantizationEnabled` and `QuantizeSelectedTrack()`.
+`WorkstationEngine` therefore declares **43 non-type members**: 25 method overloads, 15 properties, and 3 constants. The full documented Core API has 74 non-type entries plus 7 type entries. `NoteRevision` tracks recorded note-content changes independently of mixer and transport state. The history API adds `CanUndo`, `CanRedo`, `Undo()`, `Redo()` and `CommitEdit()`. Quantization adds `RecordingQuantizationEnabled` and `QuantizeSelectedTrack()`. `LoopEnabled` selects repeating or single-pass transport without changing project content. `EndRecording()` atomically finalizes active recording without starting or restarting transport.
 
 Undo history is transient and does not change the version 1 JSON schema. Pad presentation and hardware feedback remain adapters around the same engine; animation and MIDI output do not drive sound generation.
 
@@ -32,7 +32,7 @@ Undo history is transient and does not change the version 1 JSON schema. Pad pre
 | Built-in instruments | Implemented; keys, bass, atmosphere, synthesized drums, velocity, 64-voice limit | `AudioTests.Instruments`: each track produces nonzero finite samples; dense input stays bounded; channels align | Musical/physical listening review; richer presets and effects |
 | Note ownership and release | Implemented; selected/explicit-track note methods, sustain, retrigger, velocity-zero release, 4 ms minimum smooth onset for short taps arriving between render callbacks, immediate all-notes-off | `AudioTests.Release` checks all three melodic instruments, pre-render/early releases, ordinary tails, retriggers, and panic; `StudioSessionTests.Ownership`, `.Sustain` | Physical pedal polarity, rapid scale/chord collisions, simultaneous input sources |
 | Pitch bend | Implemented; normalized −1…1 maps to ±2 semitones for melodic voices | `ValidationTests.Controls` rejects invalid bend; formula in `SynthVoice`/`WorkstationEngine` | A frequency-response assertion and physical wheel pass; recorded bend automation |
-| Transport and metronome | Implemented; sample-clock playback, pause/resume, stop/rewind, four bars, tempo 60–180 BPM, beat position, click | `SequencingTests.Transport`: stopped clock, exact frame-based advancement, loop wrap, reset, metronome samples; `SequencingTests.Pause`: frozen clock, precise resume, pending boundary onset, stop rewind | Variable meter/length, external clock, measured timing |
+| Transport and metronome | Implemented; sample-clock playback, repeat/single-pass mode, pause/resume, stop/rewind, four bars, tempo 60–180 BPM, retained terminal beat and click | `LoopTests.Transport`, `.RecordingAndPartitions` cover completion/restart/live ownership/recording/partition behavior; `SequencingTests.Transport` covers frame-based advancement, loop wrap, reset and click; `SequencingTests.Pause`: frozen clock, precise resume, pending boundary onset, stop rewind | Variable meter/length, external clock, measured timing |
 | Pause voice/recording policy | Implemented; pause finalizes held recorded durations, disables recording, clears sequenced voices/click, and preserves live playing/sustain. Resume does not chase interrupted loop notes; they retrigger at their next scheduled onset | `SequencingTests.Pause`: live note survives pause and accepts note-off, finalized duration remains unchanged, wrapped note is silent until its next onset and then releases correctly; `StudioSessionTests.GenericPlaybackPauseResume`: UI/mapped hardware equivalence, retained owners/pedal, saved pause revision | Recorded expression automation and broader physical transport/playing combinations |
 | Loop recording and overdub | Implemented; optional sixteenth-note recording grid (on by default), expressive raw timing when off, four-track layering and same-onset/pitch replacement | `SequencingTests.Recording` and `QuantizationTests.RecordingPolicy`: grid/raw timing, per-note policy, replacement/replay, first-beat drum deduplication and superseded voice release | Retrospective capture and editable note grid |
 | Selected-track Quantise | Implemented; explicit sixteenth-note onset correction, forward midpoint/wrap policy, expressive duration retention, deterministic same-pitch collision handling, one bounded undo step and no-op suppression | `QuantizationTests.SelectedTrack`; `QuantizeCommandTests.Commands` covers hardware/UI equivalence, revision and modal guards | Physical Quantise pass and musical review |
@@ -46,21 +46,23 @@ Undo history is transient and does not change the version 1 JSON schema. Pad pre
 | Session snapshots | Implemented; detached read-only collections, validated apply, version 1 schema | `PersistenceTests.Roundtrip` checks caller mutation and later edits cannot alter stored snapshots; `ValidationTests.Projects` | Schema migrations and variable track/loop capacity |
 | JSON persistence | Implemented; 4 MiB file cap, four tracks/four bars, finite/ranged values, bounded names/events, atomic replacement | `ValidationTests.Projects`; `PersistenceTests.Roundtrip` checks roundtrip, cancellation, old-file preservation, temporary-file cleanup | Audio/MIDI export, additional schema versions |
 | Input and lifecycle validation | Implemented; invalid track/note/gain/buffer controls rejected, disposal prevents further engine work | `ValidationTests.Controls` | Extended concurrency and long-session stress |
-| Revision-aware saves and dialogs | Implemented in App adapter; captured revisions preserve newer unsaved edits, note completion advances content revision, modal operations finalize/block project mutations while preserving live performance, project replacement resets owners atomically | `StudioSessionTests.Revisions`, `.ModalIsolation`; `InputReliabilityTests.ProjectReplacement` | Full interactive picker/confirmation pass |
-| Controller feedback and shutdown | Implemented in App adapter; mute/name/connection-aware feedback, callback guards and adapter disposal | `StudioSessionTests.Feedback`, `.Shutdown` | Physical unplug/contending-app tests and visible LED/LCD verification |
+| Revision-aware saves and dialogs | Implemented in App adapter; captured revisions preserve newer unsaved edits, idempotent recording finalization cannot restart a naturally completed pass, note completion advances content revision, modal operations finalize/block project mutations while preserving live performance, project replacement resets owners atomically | `StudioSessionTests.Revisions`, `.ModalIsolation`; `InputReliabilityTests.ProjectReplacement` | Full interactive picker/confirmation pass |
+| Controller feedback and shutdown | Implemented in App adapter; mute/name/connection/loop-aware feedback, callback guards and adapter disposal | `StudioSessionTests.Feedback`, `.Shutdown` | Physical unplug/contending-app tests and visible LED/LCD verification |
 | Track arrows and Drum layout | Implemented in MIDI adapter; observed left/right mapping, mode-aware control-port Drum normalization, retained releases, blue/red Drum LEDs and Session-mode repaint | `ControlMappingTests.Commands`, `PerformanceRoutingTests.Routing`, `ProtocolTests.Feedback`; `StudioSessionTests.Ownership` checks raw-packet navigation boundaries and rendered drum routing. Local physical capture confirmed mode 1 and `99` Drum input on the control pair. On 2026-10-26, William confirmed build `3fe448d` displays blue Drum pads that make drum sounds, and both track-arrow directions are correct | Individual verification of all pads, muted red LEDs, Session-mode repaint, LCD behavior and broader playing quality |
 
 ## Test inventory and physical evidence
 
-The executable runners currently define **17 Core groups**, **11 MIDI groups**, and **14 App groups**: **42 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
+The executable runners currently define **19 Core groups**, **11 MIDI groups**, and **15 App groups**: **45 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
 
 ```powershell
 .\scripts\verify.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-The combined verification script passed all 42 groups for this milestone, with zero build warnings/errors, clean prettyCSharp formatting and no outstanding style/analyzer diagnostics at informational severity. Automated checks do not establish physical audio quality or complete hardware coverage.
+The combined verification script passed all 45 groups for this milestone, with zero build warnings/errors, clean prettyCSharp formatting and no outstanding style/analyzer diagnostics at informational severity. Automated checks do not establish physical audio quality or complete hardware coverage.
 
 The running Quantise build was resized separately in width and height to approximately 1,000 × 700 logical pixels. All four tracks, four bars, sixteen pads and the complete status line remained visible without scrollbars; the pad flash matched its resized face. The Loop menu aligned its labels, disabled Quantise on an empty non-recording track, and toggled the transient recording grid without marking content unsaved. Sound checks were unavailable during this pass because Windows reported no default playback output.
+
+The running Loop build's Repeat menu was toggled off and back on. Its checkmark and the `4 bars · once` header agreed, without a phantom unsaved-content change. Natural completion, finalized save contents and retained live-note release were checked through the engine/App regression suites; audible endpoint behavior and the physical button/LCD still need confirmation after restoring audio output.
 
 The local formatter runtime is Python 3.12. GitHub CI pins Python **3.13.17**, whose Windows x64 artifact is listed in the Actions runtime manifest. This tooling pin does not change the API inventory or supported music behavior.
 
@@ -96,6 +98,8 @@ During the Quantise milestone, an isolated Release/x64 benchmark loaded 8,192 no
 
 These are host-specific lock-held compute costs on .NET 10.0.13, including allocation and scheduling variation. No audio stream or MIDI port was opened. They establish lower bulk-edit cost, not a maximum input wait, glitch-free output or physical latency guarantee. Bulk actions still hold the engine lock; reducing their tail latency further remains production work.
 
+The Loop milestone also batches simultaneous held-note finalization at transport/recording boundaries; individual note-off remains incremental. With a full 8,192-note project, two warmups and eight natural-completion samples, the final-source callback averaged **2.08 ms** with 384 melodic owners and **1.86 ms** with a schema-valid all-melodic 512-owner configuration. Observed maxima were **7.08 ms** and **2.71 ms** respectively, and all project notes were retained. An earlier prototype's 384-owner sample reached **13.31 ms**, demonstrating host variation. These short no-stream measurements do not establish a deadline or physical playback quality.
+
 ## Initial limits and unimplemented areas
 
 | Limit | Current value |
@@ -111,4 +115,4 @@ These are host-specific lock-held compute costs on .NET 10.0.13, including alloc
 | Project file | Version 1 JSON, at most 4 MiB |
 | Undo history | At most 64 edit steps and 32,768 retained note deltas; not persisted |
 
-No VST hosting, audio import/export, song arranger, synthesized aftertouch/modulation response, MIDI learn, external instrument routing, or project-to-hardware MIDI clock is implemented. Native Launchkey scale/chord/arp features can send ordinary performed notes, but the application does not mirror or synchronize their settings. Saved projects retain finalized notes and mixer state; metronome/selection, recording-grid preference, history and continuous pitch/sustain automation are not persisted. Remaining controller work is tracked in [the production-polish goal](../production_polish.md).
+No VST hosting, audio import/export, song arranger, synthesized aftertouch/modulation response, MIDI learn, external instrument routing, or project-to-hardware MIDI clock is implemented. Native Launchkey scale/chord/arp features can send ordinary performed notes, but the application does not mirror or synchronize their settings. Saved projects retain finalized notes and mixer state; metronome/selection, recording-grid/repeat preferences, history and continuous pitch/sustain automation are not persisted. Remaining controller work is tracked in [the production-polish goal](../production_polish.md).

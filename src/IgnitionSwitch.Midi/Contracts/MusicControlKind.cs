@@ -28,5 +28,7 @@ public enum MusicControlKind
     /// <summary>Restores the latest reverted project edit.</summary>
     Redo,
     /// <summary>Aligns recorded notes on the selected track to the recording grid.</summary>
-    QuantizeSelectedTrack
+    QuantizeSelectedTrack,
+    /// <summary>Toggles whether playback repeats at the loop boundary.</summary>
+    ToggleLoop
 }

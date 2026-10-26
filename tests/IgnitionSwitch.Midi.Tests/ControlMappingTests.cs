@@ -108,51 +108,50 @@ internal static class ControlMappingTests
             "Unvalidated control value escaped normalization bounds."
         );
         ShiftUndo();
-        Quantise();
+        PrimaryButton(75, MusicControlKind.QuantizeSelectedTrack, "Quantise");
+        PrimaryButton(118, MusicControlKind.ToggleLoop, "Loop");
     }
 
-    private static void Quantise()
+    private static void PrimaryButton(byte number, MusicControlKind kind, string name)
     {
         var mapper = new LaunchkeyControlMapper();
         Check.That(
-            mapper.TryMap(Raw(0xBF, 75, 127), out MusicControlEvent? command) && command?.Kind
-                == MusicControlKind.QuantizeSelectedTrack,
-            "The raw Quantise press must request selected-track quantization."
+            mapper.TryMap(Raw(0xBF, number, 127), out MusicControlEvent? command) && command?.Kind
+                == kind,
+            $"The raw {name} press must request its primary operation."
         );
         Check.That(
-            !mapper.TryMap(Raw(0xBF, 75, 0), out _),
-            "A Quantise release must not repeat the operation."
+            !mapper.TryMap(Raw(0xBF, number, 0), out _),
+            $"A {name} release must not repeat the operation."
         );
         Check.That(
-            !mapper.TryMap(Raw(0xB0, 75, 127), out _)
-                && !mapper.TryMap(Raw(0xB1, 75, 127), out _)
-                && !mapper.TryMap(Raw(0xBF, 75, 127, true), out _)
-                && !mapper.TryMap(Cc(75, -1), out _)
-                && !mapper.TryMap(Cc(75, 128), out _),
-            "Quantise must reject wrong channels, performance input, and invalid values."
+            !mapper.TryMap(Raw(0xB0, number, 127), out _)
+                && !mapper.TryMap(Raw(0xB1, number, 127), out _)
+                && !mapper.TryMap(Raw(0xBF, number, 127, true), out _)
+                && !mapper.TryMap(Cc(number, -1), out _)
+                && !mapper.TryMap(Cc(number, 128), out _),
+            $"{name} must reject wrong channels, performance input, and invalid values."
         );
         Check.That(
             !mapper.TryMap(Raw(0xB0, 108, 127), out _),
             "Shift must remain a modifier rather than an application command."
         );
         Check.That(
-            mapper.TryMap(Raw(0xBF, 75, 127), out command) && command?.Kind
-                == MusicControlKind.QuantizeSelectedTrack,
-            "Shift+Quantise must preserve quantization rather than inventing a recording toggle."
+            mapper.TryMap(Raw(0xBF, number, 127), out command) && command?.Kind == kind,
+            $"Shift+{name} must preserve the same primary operation."
         );
         Check.That(
-            !mapper.TryMap(Raw(0xBF, 75, 0), out _),
-            "Shift+Quantise release must not repeat the operation."
+            !mapper.TryMap(Raw(0xBF, number, 0), out _),
+            $"Shift+{name} release must not repeat the operation."
         );
-        AssertUndo(mapper, MusicControlKind.Redo, "Quantise must not clear the held Shift state.");
+        AssertUndo(mapper, MusicControlKind.Redo, $"{name} must not clear the held Shift state.");
         Check.That(
             !mapper.TryMap(Raw(0xB0, 108, 0), out _),
             "Shift release must remain a modifier update."
         );
         Check.That(
-            mapper.TryMap(Raw(0xBF, 75, 1), out command) && command?.Kind
-                == MusicControlKind.QuantizeSelectedTrack,
-            "A subsequent nonzero Quantise press must retain its primary action."
+            mapper.TryMap(Raw(0xBF, number, 1), out command) && command?.Kind == kind,
+            $"A subsequent nonzero {name} press must retain its primary action."
         );
     }
 

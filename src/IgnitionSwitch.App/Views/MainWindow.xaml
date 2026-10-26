@@ -273,7 +273,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Loop" Style="{StaticResource PanelHeadingStyle}"
                                         VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="1" Text="4 bars"
+                                    <TextBlock x:Name="LoopLengthText" Grid.Column="1" Text="4 bars"
                                         Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" />
                                     <TextBlock x:Name="SelectedTrackText" Grid.Column="2" Text="Velvet keys"
                                         FontSize="12" Foreground="{StaticResource MutedText}"
@@ -286,6 +286,10 @@
                                         <FontIcon Glyph="&#xE712;" FontSize="16" />
                                         <Button.Flyout>
                                             <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                <ToggleMenuFlyoutItem x:Name="RepeatLoopItem"
+                                                    Text="Repeat loop" IsChecked="True"
+                                                    AutomationProperties.Name="Repeat loop" />
+                                                <MenuFlyoutSeparator />
                                                 <MenuFlyoutItem x:Name="QuantizeTrackItem"
                                                     Text="Quantise selected track"
                                                     AutomationProperties.Name="Quantise selected track to the 1/16 note grid" />

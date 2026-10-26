@@ -210,14 +210,7 @@ internal sealed class ControllerSession : IDisposable
             return;
         }
 
-        if (
-            previousFeedback is { } previous
-            && previous.SelectedTrack == feedback.SelectedTrack
-            && previous.Playing == feedback.Playing
-            && previous.Recording == feedback.Recording
-            && previous.TrackNames.SequenceEqual(feedback.TrackNames)
-            && previous.TrackMuted.SequenceEqual(feedback.TrackMuted)
-        )
+        if (LaunchkeyFeedbackPresentation.HasSameState(previousFeedback, feedback))
         {
             return;
         }
@@ -250,7 +243,7 @@ internal sealed class ControllerSession : IDisposable
         SendDaw(
             LaunchkeyMk3Protocol.SetDisplayRow(
                 1,
-                feedback.Recording ? "Recording" : feedback.Playing ? "Playing" : "Ready to play"
+                LaunchkeyFeedbackPresentation.TransportText(feedback)
             )
         );
         previousFeedback = feedback;

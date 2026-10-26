@@ -6,5 +6,6 @@ public sealed record ControllerFeedback(
     bool Playing,
     bool Recording,
     IReadOnlyList<string> TrackNames,
-    IReadOnlyList<bool> TrackMuted
+    IReadOnlyList<bool> TrackMuted,
+    bool LoopEnabled = true
 );

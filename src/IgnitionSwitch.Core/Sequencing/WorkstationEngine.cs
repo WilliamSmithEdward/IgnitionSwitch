@@ -169,14 +169,14 @@ public sealed partial class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Gets the audio-clock position within the sixteen-beat loop.</summary>
+    /// <summary>Gets the audio-clock position within the loop, retaining sixteen beats when a non-repeating pass completes.</summary>
     public double BeatPosition
     {
         get
         {
             lock (_sync)
             {
-                return _absoluteBeat % LoopBeats;
+                return _passCompleted ? LoopBeats : _absoluteBeat % LoopBeats;
             }
         }
     }
@@ -225,7 +225,7 @@ public sealed partial class WorkstationEngine : IDisposable
         {
             ThrowIfDisposed();
             _history.Commit();
-            _isPlaying = true;
+            StartPlayback();
         }
     }
 
@@ -239,12 +239,7 @@ public sealed partial class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
-            FinalizeHeldRecordings();
-            _history.Commit();
-            _isPlaying = false;
-            _isRecording = false;
-            _clickSamples = 0;
-            _ = _voices.RemoveAll(voice => voice.IsLoop);
+            EndSequencedPlayback();
         }
     }
 
@@ -254,15 +249,8 @@ public sealed partial class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
-            FinalizeHeldRecordings();
-            _history.Commit();
-            _isPlaying = false;
-            _isRecording = false;
-            _absoluteBeat = 0;
-            _scheduleCursor = 0;
-            _pendingLoopStarts.Clear();
-            _lastClickBeat = -1;
-            _clickSamples = 0;
+            EndSequencedPlayback();
+            ResetPlaybackPosition();
             _held.Clear();
             _voices.Clear();
 
@@ -301,17 +289,15 @@ public sealed partial class WorkstationEngine : IDisposable
 
             if (_isRecording)
             {
-                FinalizeHeldRecordings();
-                _history.Commit();
+                _ = EndRecordingCore();
             }
 
             else
             {
                 _history.Commit();
-                _isPlaying = true;
+                StartPlayback();
+                _isRecording = true;
             }
-
-            _isRecording = !_isRecording;
         }
     }
 
@@ -636,7 +622,19 @@ public sealed partial class WorkstationEngine : IDisposable
                     {
                         _absoluteBeat += beatsPerSample;
 
-                        if (_absoluteBeat % LoopBeats < position)
+                        if (
+                            _finishAtBeat is double end
+                            && _absoluteBeat >= end - BeatBoundaryTolerance
+                        )
+                        {
+                            _absoluteBeat = end;
+                            _passCompleted = true;
+                            _finishAtBeat = null;
+                            EndSequencedPlayback();
+                            _scheduleCursor = _schedule.Count;
+                        }
+
+                        else if (_absoluteBeat % LoopBeats < position)
                         {
                             _scheduleCursor = 0;
                         }
@@ -809,17 +807,46 @@ public sealed partial class WorkstationEngine : IDisposable
 
     private void FinalizeHeldRecordings()
     {
+        if (_held.Count == 0)
+        {
+            return;
+        }
+
+        int recordingCount = 0;
+
+        foreach (HeldNote held in _held.Values)
+        {
+            if (held.RecordStart is not null)
+            {
+                recordingCount++;
+            }
+        }
+
+        if (recordingCount == 0)
+        {
+            return;
+        }
+
+        bool updateSchedule = recordingCount == 1;
+        long revision = _noteRevision;
+
         foreach (HeldNote held in _held.Values)
         {
             if (held.RecordStart is double start)
             {
-                RecordNote(held, _absoluteBeat - start);
+                RecordNote(held, _absoluteBeat - start, updateSchedule);
                 held.RecordStart = null;
             }
         }
+
+        if (!updateSchedule && _noteRevision != revision)
+        {
+            RebuildSchedule();
+            AlignHistorySchedule();
+        }
     }
 
-    private void RecordNote(HeldNote held, double duration)
+    private void RecordNote(HeldNote held, double duration, bool updateSchedule = true)
     {
         if (held.RecordStart is not double start)
         {
@@ -845,7 +872,12 @@ public sealed partial class WorkstationEngine : IDisposable
             }
 
             ReleaseLoopVoices(stored.Id);
-            RemoveScheduledNote(stored);
+
+            if (updateSchedule)
+            {
+                RemoveScheduledNote(stored);
+            }
+
             _ = _pendingLoopStarts.Remove(stored.Id);
 
             if (replacement is null)
@@ -888,7 +920,11 @@ public sealed partial class WorkstationEngine : IDisposable
         }
 
         _pendingLoopStarts[replacement.Id] = (long)Math.Floor(start / LoopBeats) + 1;
-        InsertScheduledNote(replacement, held.Track);
+
+        if (updateSchedule)
+        {
+            InsertScheduledNote(replacement, held.Track);
+        }
 
         if (changed)
         {

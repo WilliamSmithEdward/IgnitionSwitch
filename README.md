@@ -42,6 +42,8 @@ Press hardware **Quantise** or choose **Loop options → Quantise selected track
 
 **Space** plays/pauses at the current position; **Esc** stops and rewinds. Pause ends recording and keeps live playing available. Choose **Save** to store the session. Connection/audio details are in **Devices**, and **?** opens shortcut help.
 
+Use hardware **Loop**, or **Loop options → Repeat loop**, to switch between repeating playback and a single pass. A single pass finishes at the end of the four bars and keeps held live notes playable. Play or Record from **End** starts a fresh pass. Repeat is a preference for the current app run.
+
 Use **Ctrl+Z** / **Ctrl+Shift+Z**, or hardware **Undo** / **Shift+Undo**, to reverse or restore recording parts and mixer edits. Drum hits flash the matching pad on the controller and in the app. The [production-polish goal](docs/production_polish.md) tracks the remaining controls and verification.
 
 Drag the handle beside Tracks to change its width, or the handle between Loop and Drums to change their heights. Tab to a handle and use its arrow keys for keyboard resizing. The layout follows the window size without horizontal scrolling.

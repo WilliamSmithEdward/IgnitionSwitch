@@ -113,6 +113,7 @@ public sealed class LaunchkeyControlMapper
             LaunchkeyMk3Protocol.Play => new(MusicControlKind.TogglePlayback),
             LaunchkeyMk3Protocol.Stop => new(MusicControlKind.Stop),
             LaunchkeyMk3Protocol.Record => new(MusicControlKind.ToggleRecording),
+            LaunchkeyMk3Protocol.Loop => new(MusicControlKind.ToggleLoop),
             LaunchkeyMk3Protocol.Click => new(MusicControlKind.ToggleMetronome),
             LaunchkeyMk3Protocol.Quantise => new(MusicControlKind.QuantizeSelectedTrack),
             LaunchkeyMk3Protocol.Undo => new(

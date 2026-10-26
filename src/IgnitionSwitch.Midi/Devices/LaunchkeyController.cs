@@ -162,7 +162,8 @@ public sealed class LaunchkeyController : IMusicController
             feedback.Playing,
             feedback.Recording,
             Array.AsReadOnly(names),
-            Array.AsReadOnly(muted)
+            Array.AsReadOnly(muted),
+            feedback.LoopEnabled
         );
 
         current.WriteFeedback(snapshot);

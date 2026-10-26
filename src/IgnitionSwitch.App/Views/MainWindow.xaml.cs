@@ -283,6 +283,14 @@ public sealed partial class MainWindow : Window, IDisposable
             );
             session.MarkChanged();
         };
+        RepeatLoopItem.Click += (_, _) =>
+        {
+            if (!updating)
+            {
+                session.LoopEnabled = RepeatLoopItem.IsChecked;
+                RefreshState();
+            }
+        };
         QuantizeTrackItem.Click += (_, _) =>
         {
             _ = session.QuantizeSelectedTrack();
@@ -472,15 +480,22 @@ public sealed partial class MainWindow : Window, IDisposable
         MetronomeToggle.IsChecked = engine.MetronomeEnabled;
         MuteButton.IsChecked = tracks[engine.SelectedTrack].IsMuted;
         LoopOptionsButton.IsEnabled = !session.IsInteractionBlocked;
+        RepeatLoopItem.IsChecked = session.LoopEnabled;
+        LoopLengthText.Text = engine.LoopEnabled
+            ? $"{engine.LoopBars} bars"
+            : $"{engine.LoopBars} bars · once";
+        RepeatLoopItem.IsEnabled = !session.IsInteractionBlocked;
         QuantizeTrackItem.IsEnabled = !session.IsInteractionBlocked
             && (engine.IsRecording || tracks[engine.SelectedTrack].NoteCount > 0);
         RecordingGridItem.IsChecked = session.RecordingQuantizationEnabled;
         RecordingGridItem.IsEnabled = !session.IsInteractionBlocked;
         SelectedTrackText.Text = tracks[engine.SelectedTrack].Name;
-        LoopProgress.Value = engine.BeatPosition;
-        timeline.UpdatePosition(engine.BeatPosition, engine.IsPlaying);
-        PositionText.Text =
-            $"Bar {(int)(engine.BeatPosition / 4) + 1} · beat {(int)(engine.BeatPosition % 4) + 1}";
+        double beatPosition = engine.BeatPosition;
+        LoopProgress.Value = beatPosition;
+        timeline.UpdatePosition(beatPosition, engine.IsPlaying);
+        PositionText.Text = beatPosition >= engine.LoopBeats
+            ? "End"
+            : $"Bar {(int)(beatPosition / 4) + 1} · beat {(int)(beatPosition % 4) + 1}";
 
         for (int index = 0; index < tracks.Count; index++)
         {

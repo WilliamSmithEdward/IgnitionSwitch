@@ -7,6 +7,11 @@
     ),
     ("Sustain, note ownership, retrigger, and panic release voices", AudioTests.Release),
     ("Transport advances from audio samples and wraps four bars", SequencingTests.Transport),
+    ("Loop-off finishes the current pass and preserves transport preferences", LoopTests.Transport),
+    (
+        "Natural loop completion retains live ownership, recording, restart, and callback equivalence",
+        LoopTests.RecordingAndPartitions
+    ),
     (
         "Pause freezes time, finalizes recording, and resumes without stranded loop voices",
         SequencingTests.Pause
