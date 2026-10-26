@@ -58,7 +58,7 @@ Statuses below describe code currently present. The identity/connection and appl
 
 | Control | Current IgnitionSwitch behavior | Remaining work |
 | --- | --- | --- |
-| 37 keys and velocity | Play the selected instrument; record incoming notes into the loop. Velocity-zero note-on releases a note. Releases retain their original track ownership; overlapping same-pitch owners on different MIDI channels remain held until the final owner releases. | Physical velocity/rapid-retrigger checks and musical tuning. |
+| 37 keys and velocity | Play the selected instrument; record incoming notes into the loop. Velocity-zero note-on releases a note. Releases retain their original track ownership; overlapping same-pitch owners on different MIDI channels remain held until the final owner releases. Short taps that arrive entirely between render callbacks retain a smoothly rendered onset. | Physical velocity/rapid-retrigger checks and musical tuning. |
 | Pitch wheel | Routes the unsigned 14-bit MIDI value to the engine's pitch bend control. | Confirm range, center, and response on hardware. |
 | Modulation wheel | Ordinary modulation CC input is parsed but does not modulate an engine parameter. Hardware-generated Strum notes use the normal note path. | Musical modulation mapping and physical Strum verification. |
 | Sustain pedal | CC64: values ≥64 sustain; lower values release sustained tracks. | Pedal polarity/custom mapping and cross-track playing checks. |

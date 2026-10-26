@@ -12,6 +12,7 @@ internal sealed class SynthVoice(
     bool isLoop
 )
 {
+    private const int MinimumOnsetFrames = WorkstationEngine.SampleRate / 250;
     private readonly InstrumentKind _instrument = instrument;
     private readonly double _frequency = 440 * Math.Pow(2, (note - 69) / 12.0);
     private readonly float _gain = (float)Math.Pow(velocity / 127.0, 1.4) * 0.17f;
@@ -19,6 +20,7 @@ internal sealed class SynthVoice(
     private long _age;
     private long _releaseAge = -1;
     private float _releaseLevel;
+    private bool _releasePending;
     private uint _noise = 123456789;
     private double _phase;
 
@@ -34,12 +36,24 @@ internal sealed class SynthVoice(
             return;
         }
 
+        if (_age < MinimumOnsetFrames)
+        {
+            _releasePending = true;
+            return;
+        }
+
         _releaseLevel = Envelope();
         _releaseAge = _age;
+        _releasePending = false;
     }
 
     public float Render(double pitchRatio)
     {
+        if (_releasePending && _age >= MinimumOnsetFrames)
+        {
+            Release();
+        }
+
         double seconds = (double)_age / WorkstationEngine.SampleRate;
         float envelope = Envelope();
         double wave;

@@ -31,6 +31,8 @@ flowchart LR
 
 `WorkstationEngine.Render` fills interleaved stereo floating-point samples at 48 kHz. Musical time advances from rendered audio frames. UI refresh timers display that state; they do not drive the sequencer. Scheduled loop events are ordered when recorded content changes. Live playing works while the transport is stopped or paused.
 
+Very short melodic taps retain a smooth 4 ms minimum onset before their release tail, so a note-on followed by note-off between output callbacks cannot cancel an entirely unrendered voice. This does not delay note-on, and explicit panic still clears voices immediately.
+
 Play/pause preserves the transport position. Pausing ends recording, finalizes held recorded durations, and silences sequenced voices and the click while retaining live note/pedal ownership. Resume continues from that position; interrupted loop notes retrigger at their next scheduled onset rather than being reconstructed mid-note. Stop releases everything and rewinds. UI actions and normalized hardware transport commands use the same session behavior.
 
 The initial project schema has four instrument tracks and a sixteen-beat loop. Recorded onsets and durations snap to quarter-beat steps: sixteenth notes in the current four-beat meter. Overdubbing the same pitch at the same grid point replaces that recorded note. Duration can cross the loop boundary. Track mutes/gains and master gain affect the shared mix, which is limited before output.

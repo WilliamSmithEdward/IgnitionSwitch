@@ -143,6 +143,7 @@ internal static class AudioTests
 
     public static Task Release()
     {
+        VerifyShortMelodicTaps();
         using WorkstationEngine engine = new();
         engine.NoteOn(0, 60, 100);
         engine.SelectedTrack = 2;
@@ -181,5 +182,91 @@ internal static class AudioTests
             "Panic must silence immediately."
         );
         return Task.CompletedTask;
+    }
+
+    private static void VerifyShortMelodicTaps()
+    {
+        for (int track = 0; track < 3; track++)
+        {
+            using WorkstationEngine immediate = new();
+            using WorkstationEngine reference = new();
+            using WorkstationEngine early = new();
+            immediate.NoteOn(track, 60, 100);
+            immediate.NoteOff(track, 60);
+            float[] tap = Check.Render(immediate, 0.03);
+            reference.NoteOn(track, 60, 100);
+            float[] onset = Check.Render(reference, 0.004);
+            reference.NoteOff(track, 60);
+            float[] expected =
+            [
+                .. onset,
+                .. Check.Render(reference, 0.026)
+            ];
+            Check.That(
+                tap.SequenceEqual(expected),
+                "An unrendered tap must retain the instrument's normal four-millisecond onset and release envelope."
+            );
+            Check.That(
+                tap[0] == 0 && Check.Energy(tap) > 0.01,
+                "A tap before the audio callback must produce sound with a smooth initial onset."
+            );
+
+            for (int sample = 2; sample < tap.Length; sample += 2)
+            {
+                Check.That(
+                    Math.Abs(tap[sample] - tap[sample - 2]) < 0.02,
+                    "A short tap must not create a full-amplitude release click."
+                );
+            }
+
+            early.NoteOn(track, 60, 100);
+            float[] beginning = Check.Render(early, 0.002);
+            early.NoteOff(track, 60);
+            early.NoteOff(track, 60);
+            float[] earlyTap =
+            [
+                .. beginning,
+                .. Check.Render(early, 0.028)
+            ];
+            Check.That(
+                earlyTap.SequenceEqual(expected),
+                "Very young and repeated releases must preserve the same bounded onset without extending it."
+            );
+            _ = Check.Render(immediate, 0.85);
+            Check.That(
+                Check.Energy(Check.Render(immediate, 0.02)) == 0,
+                "A deferred short tap must eventually become silent for every melodic instrument."
+            );
+
+            immediate.NoteOn(track, 60, 100);
+            _ = Check.Render(immediate, 0.02);
+            immediate.NoteOff(track, 60);
+            _ = Check.Render(immediate, 0.85);
+            Check.That(
+                Check.Energy(Check.Render(immediate, 0.02)) == 0,
+                "Later releases must retain normal finite instrument tails."
+            );
+            immediate.NoteOn(track, 60, 100);
+            immediate.NoteOff(track, 60);
+            immediate.AllNotesOff();
+            Check.That(
+                Check.Energy(Check.Render(immediate, 0.02)) == 0,
+                "Panic must cancel a deferred onset immediately."
+            );
+
+            immediate.NoteOn(track, 60, 100);
+            immediate.NoteOn(track, 60, 100);
+            immediate.NoteOff(track, 60);
+            float[] retrigger = Check.Render(immediate, 0.03);
+            Check.That(
+                retrigger[0] == 0 && Check.Energy(retrigger) > 0.01,
+                "An unrendered retrigger must give the new voice its own smooth onset."
+            );
+            _ = Check.Render(immediate, 0.85);
+            Check.That(
+                Check.Energy(Check.Render(immediate, 0.02)) == 0,
+                "Unrendered retriggers must not strand their original or replacement voices."
+            );
+        }
     }
 }
