@@ -16,9 +16,10 @@ Active development goal, started **2026-10-26**. The first hardware target is Wi
 | Milestone | Current state | Remaining validation/work |
 | --- | --- | --- |
 | Hardware audit | Complete for documented MK3 control messages and native roles | Confirm ambiguous firmware behavior on William's unit rather than guessing from diagrams |
-| Drum hit feedback and physical layout | Implemented: coalesced hardware white flashes, matching app feedback, minimum visible duration, adapter-provided note order | Running-app and physical feedback verification |
+| Drum hit feedback and physical layout | Implemented: coalesced hardware white flashes, matching app feedback, minimum visible duration, adapter-provided note order; running app flash/restore and aligned shortcut menu checked | Physical feedback verification |
 | Undo/Redo | Implemented: bounded note/mixer delta history, recording-part grouping, gesture coalescing, hardware and keyboard commands | Interactive gestures, save/dirty state and physical Shift+Undo verification |
-| Capture MIDI, Quantise and Loop | Pending | Retrospective sample-clocked performance history; undoable timing correction; explicit one-pass versus repeating transport |
+| Quantise | Implemented: selected-track onset correction with preserved durations, deterministic collisions, one undo step, optional recording grid and compact Loop options | 42 combined automated groups, build, formatting and informational analyzers pass; physical Quantise and musical review remain |
+| Capture MIDI and Loop | Pending | Retrospective sample-clocked performance history; explicit one-pass versus repeating transport |
 | Scene and clip controls | Pending | Selectable scene content, launch semantics and Stop/Solo/Mute contextual row actions |
 | All parameter pages | Pending | Eight useful parameters per applicable page, pan/effects sends, Device Select/Lock, pickup and LCD values |
 | Native feature integration | Partially verified | Scale/chord/arp/strum and transposition coverage; optional clock synchronization through the performance output |

@@ -26,5 +26,7 @@ public enum MusicControlKind
     /// <summary>Reverts the latest available project edit.</summary>
     Undo,
     /// <summary>Restores the latest reverted project edit.</summary>
-    Redo
+    Redo,
+    /// <summary>Aligns recorded notes on the selected track to the recording grid.</summary>
+    QuantizeSelectedTrack
 }

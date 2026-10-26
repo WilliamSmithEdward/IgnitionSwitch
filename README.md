@@ -36,7 +36,9 @@ The Windows App SDK and application dependencies are pinned in the project files
 
 ## Play
 
-Connect the Launchkey by USB, select a track, and press **Record** or **R** to capture a phrase. Press Record again to keep it looping; select another track to add a layer. Drum mode plays the drum track, and recording uses a sixteenth-note grid.
+Connect the Launchkey by USB, select a track, and press **Record** or **R** to capture a phrase. Press Record again to keep it looping; select another track to add a layer. Drum mode plays the drum track. Recording uses a sixteenth-note grid by default; turn it off in **Loop options** to preserve your timing. The recording preference lasts for the current app run.
+
+Press hardware **Quantise** or choose **Loop options → Quantise selected track** to align that track's note starts. Note lengths keep their expression, and Undo restores the original timing.
 
 **Space** plays/pauses at the current position; **Esc** stops and rewinds. Pause ends recording and keeps live playing available. Choose **Save** to store the session. Connection/audio details are in **Devices**, and **?** opens shortcut help.
 

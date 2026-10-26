@@ -32,6 +32,8 @@ The following observations come from development smoke tests on 2026-10-26. The 
 | Gain display feedback | All five gain controls share 100 ms compositor easing while their native values and audio targets apply immediately. Running-app automation checked master zero/full endpoints, track target updates, direct pointer takeover and resizing with aligned fill/thumb positions. Physical rapid-pot sweeps and animation cadence remain separate checks. |
 | Physical track arrows | William reported left/right reversed with the original mapping. The device profile now maps left to CC103 and right to CC102; this correction follows the physical report rather than the conflicting labels in the reference diagram. On 2026-10-26, William confirmed both physical directions work correctly in the build matching `3fe448d`. Releases and selection limits are covered by regression checks. |
 | Physical Drum-mode input and sound | A read-only capture while William used Shift+Drum observed `BF 03 01` followed by `99 25 7E` and `99 25 00` on the second/control MIDI input: mode 1, note 37, channel 10, velocity-zero release. No output or audio ports were opened by the capture tool. After the correction in `3fe448d`, William confirmed that Shift+Drum lights the pads blue and pad strikes produce drum sounds. |
+| Application pad hit presentation | Running build `8d64d95` at approximately 1,348 × 834 logical pixels showed the clicked Kick pad flash amber and settle after release. All sixteen pads and four bars remained visible; the shortcut flyout used aligned columns including Undo/Redo. This is application visual evidence, not physical-pad or timing evidence. |
+| Quantise menu and compact scaling | The Quantise milestone's running build showed an aligned Loop options menu; the recording-grid checkmark switched off and back on without marking musical content unsaved. Native width and height resizing to approximately 1,000 × 700 logical pixels retained all tracks, four bars, sixteen pads and the full status line without scrollbars. The Kick flash filled the resized pad correctly. The Quantise action was disabled for an empty, non-recording track. |
 | Broader physical playing coverage | Drum-mode lighting/sound and both track-arrow directions are confirmed above. A complete keys, individual pads, pots, wheels and pedal pass, plus broader musical listening, remains incomplete. |
 | Actual pad colors/LCD rendering | Blue Drum-mode lighting is confirmed by William. Muted red Drum lighting, Session colors and LCD appearance still need a visual hardware pass. |
 | Audio latency and device timing | No measured hardware latency or timing benchmark yet. |
@@ -82,7 +84,7 @@ Statuses below describe code currently present. The identity/connection and appl
 | Click | Toggle the application metronome. | Physical confirmation. |
 | Loop | No button command yet; the engine currently uses a fixed four-bar loop. | An explicit loop behavior/UI and button mapping. |
 | Capture MIDI | No retrospective capture command. | Rolling note history and capture semantics. |
-| Quantise | No button command. Recording already uses the engine's current grid. | A dedicated quantise operation and feedback. |
+| Quantise | CC75 corrects selected-track onsets to sixteenths as one undoable edit, preserving durations. The Loop options menu provides the same action and an optional recording grid. | Physical button and musical review. |
 | Undo / Shift+Undo | Undo / Redo the latest recording part or mixer edit. DAW channel 1 CC108 tracks Shift; channel 16 CC77 invokes the command on press. History is bounded and resets when loading another project. | Physical gesture/recording review and history descriptions. |
 | Scene up/down; Scene Launch | No application scene command. Native chord/menu functions remain device-owned. | Scene/bank navigation and launching. |
 | Stop/Solo/Mute button | No application mode-cycle command; lower session row currently remains mute. | Implement the hardware's contextual modes. |
@@ -116,6 +118,7 @@ Human MIDI channels are **1–16**. The C# contracts use **0–15**. This differ
 | Pot CC26 | 16 / 15 | Tempo `60 + round(value × 120 / 127)` BPM. |
 | Track left CC103 / right CC102 | 16 / 15 | Selection offset −1 / +1 on press; no action on release. |
 | Play/Stop/Record CC115/116/117 | 16 / 15 | Start/pause/resume toggle / stop and rewind / recording toggle on press. |
+| Quantise CC75 | 16 / 15 | Correct selected-track note onsets on press; Shift retains the same action. |
 | Click CC76 | 16 / 15 | Metronome toggle on press. |
 | Session notes 96–99 | 1 / 0, control port | Select track index `note - 96`. |
 | Session notes 112–115 | 1 / 0, control port | Toggle mute at index `note - 112`. |
@@ -303,7 +306,7 @@ Easy Start can expose a Novation onboarding USB drive. That drive is not a MIDI 
 | Windows port lifecycle and feedback | `src/IgnitionSwitch.Midi/Devices/LaunchkeyController.cs`, `ControllerSession.cs` |
 | Generic command execution and note routing | `src/IgnitionSwitch.App/Services/StudioSession.cs` |
 | Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: 11 groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, modes/Undo/Shift+Undo, captured Drum routing, immutable pad layouts and deterministic hit feedback. |
-| Application input checks | `tests/IgnitionSwitch.App.Tests`: 13 groups including shared-audio buffer, transport, save-revision, feedback/shutdown, chord bursts, overlapping ownership, modal audition, project replacement, pad-activity mailbox and Undo/Redo integration. No physical-device I/O is used by these checks. |
+| Application input checks | `tests/IgnitionSwitch.App.Tests`: 14 groups including shared-audio buffer, transport, save-revision, feedback/shutdown, chord bursts, overlapping ownership, modal audition, project replacement, pad-activity mailbox, Undo/Redo and Quantise integration. No physical-device I/O is used by these checks. |
 
 Run `dotnet run --project tests/IgnitionSwitch.Midi.Tests --no-restore` after the project has been restored. These checks do not open MIDI ports. The initial library/tests passed strict .NET builds with zero diagnostics; rerun verification after relevant changes.
 

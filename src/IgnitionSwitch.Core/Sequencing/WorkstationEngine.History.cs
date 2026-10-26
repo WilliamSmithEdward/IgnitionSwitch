@@ -130,6 +130,7 @@ public sealed partial class WorkstationEngine
             }
         }
 
+        RebuildSchedule();
         AlignHistorySchedule();
         _noteRevision++;
     }
@@ -173,20 +174,12 @@ public sealed partial class WorkstationEngine
             }
         }
 
-        for (int voice = _voices.Count - 1; voice >= 0; voice--)
-        {
-            if (_voices[voice].IsLoop && _voices[voice].Id == edit.Id)
-            {
-                _voices.RemoveAt(voice);
-            }
-        }
-
+        RemoveLoopVoices(edit.Id);
         _ = _pendingLoopStarts.Remove(edit.Id);
 
         if (index >= 0)
         {
             StoredNote stored = track.Notes[index];
-            RemoveScheduledNote(stored);
 
             if (target is null)
             {
@@ -196,7 +189,6 @@ public sealed partial class WorkstationEngine
             else
             {
                 stored.Note = target;
-                InsertScheduledNote(stored, edit.Track);
             }
         }
 
@@ -204,7 +196,6 @@ public sealed partial class WorkstationEngine
         {
             var stored = new StoredNote(edit.Id, target);
             track.Notes.Insert(Math.Min(edit.Index, track.Notes.Count), stored);
-            InsertScheduledNote(stored, edit.Track);
         }
     }
 }

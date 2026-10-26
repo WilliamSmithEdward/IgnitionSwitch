@@ -108,6 +108,52 @@ internal static class ControlMappingTests
             "Unvalidated control value escaped normalization bounds."
         );
         ShiftUndo();
+        Quantise();
+    }
+
+    private static void Quantise()
+    {
+        var mapper = new LaunchkeyControlMapper();
+        Check.That(
+            mapper.TryMap(Raw(0xBF, 75, 127), out MusicControlEvent? command) && command?.Kind
+                == MusicControlKind.QuantizeSelectedTrack,
+            "The raw Quantise press must request selected-track quantization."
+        );
+        Check.That(
+            !mapper.TryMap(Raw(0xBF, 75, 0), out _),
+            "A Quantise release must not repeat the operation."
+        );
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 75, 127), out _)
+                && !mapper.TryMap(Raw(0xB1, 75, 127), out _)
+                && !mapper.TryMap(Raw(0xBF, 75, 127, true), out _)
+                && !mapper.TryMap(Cc(75, -1), out _)
+                && !mapper.TryMap(Cc(75, 128), out _),
+            "Quantise must reject wrong channels, performance input, and invalid values."
+        );
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 108, 127), out _),
+            "Shift must remain a modifier rather than an application command."
+        );
+        Check.That(
+            mapper.TryMap(Raw(0xBF, 75, 127), out command) && command?.Kind
+                == MusicControlKind.QuantizeSelectedTrack,
+            "Shift+Quantise must preserve quantization rather than inventing a recording toggle."
+        );
+        Check.That(
+            !mapper.TryMap(Raw(0xBF, 75, 0), out _),
+            "Shift+Quantise release must not repeat the operation."
+        );
+        AssertUndo(mapper, MusicControlKind.Redo, "Quantise must not clear the held Shift state.");
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 108, 0), out _),
+            "Shift release must remain a modifier update."
+        );
+        Check.That(
+            mapper.TryMap(Raw(0xBF, 75, 1), out command) && command?.Kind
+                == MusicControlKind.QuantizeSelectedTrack,
+            "A subsequent nonzero Quantise press must retain its primary action."
+        );
     }
 
     private static void ShiftUndo()

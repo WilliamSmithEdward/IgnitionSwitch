@@ -6,7 +6,7 @@ namespace IgnitionSwitch.App.Presentation;
 
 internal sealed partial class WorkspaceLayout : IDisposable
 {
-    private const double MinimumBodyHeight = 490;
+    private const double MinimumBodyHeight = 480;
     private const double MinimumTrackWidth = 200;
     private const double MaximumTrackWidth = 360;
     private const double MinimumEditorWidth = 480;
@@ -50,6 +50,8 @@ internal sealed partial class WorkspaceLayout : IDisposable
         this.drumsRow = drumsRow;
         this.trackHandle = trackHandle;
         this.loopHandle = loopHandle;
+        body.MinHeight = MinimumBodyHeight;
+        root.RowDefinitions[Grid.GetRow(body)].MinHeight = MinimumBodyHeight;
         scroll.Loaded += OnLoaded;
         scroll.SizeChanged += OnSizeChanged;
         root.SizeChanged += OnSizeChanged;

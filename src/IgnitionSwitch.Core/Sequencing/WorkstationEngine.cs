@@ -292,7 +292,7 @@ public sealed partial class WorkstationEngine : IDisposable
         }
     }
 
-    /// <summary>Toggles quantized overdubbing, starting playback when necessary.</summary>
+    /// <summary>Toggles overdubbing using the current recording-quantization policy, starting playback when necessary.</summary>
     public void ToggleRecording()
     {
         lock (_sync)
@@ -347,7 +347,14 @@ public sealed partial class WorkstationEngine : IDisposable
 
             int id = NextVoiceId();
             AddVoice(new SynthVoice(id, track, note, velocity, _tracks[track].Instrument, false));
-            HeldNote held = new(id, track, note, velocity, _isRecording ? _absoluteBeat : null);
+            HeldNote held = new(
+                id,
+                track,
+                note,
+                velocity,
+                _isRecording ? _absoluteBeat : null,
+                _recordingQuantizationEnabled
+            );
 
             if (_tracks[track].Instrument == InstrumentKind.Drums)
             {
@@ -819,12 +826,10 @@ public sealed partial class WorkstationEngine : IDisposable
             return;
         }
 
-        double beat = Math.Round(start / QuantizeBeats) * QuantizeBeats % LoopBeats;
-        duration = Math.Clamp(
-            Math.Round(duration / QuantizeBeats) * QuantizeBeats,
-            QuantizeBeats,
-            LoopBeats
-        );
+        double beat = held.QuantizeRecording ? QuantizeOnset(start) : start % LoopBeats;
+        duration = held.QuantizeRecording
+            ? Math.Clamp(RoundToQuantizationGrid(duration), QuantizeBeats, LoopBeats)
+            : Math.Clamp(duration, _tempo / (60 * SampleRate), LoopBeats);
         Track track = _tracks[held.Track];
         StoredNote? replacement = null;
         int replacementIndex = -1;
@@ -1047,6 +1052,17 @@ public sealed partial class WorkstationEngine : IDisposable
         }
     }
 
+    private void RemoveLoopVoices(int id)
+    {
+        for (int voice = _voices.Count - 1; voice >= 0; voice--)
+        {
+            if (_voices[voice].IsLoop && _voices[voice].Id == id)
+            {
+                _voices.RemoveAt(voice);
+            }
+        }
+    }
+
     private sealed class Track(string name, InstrumentKind instrument, string colorHex)
     {
         public string Name { get; set; } = name;
@@ -1058,13 +1074,21 @@ public sealed partial class WorkstationEngine : IDisposable
         public List<StoredNote> Notes { get; } = new(MaximumNotesPerTrack);
     }
 
-    private sealed class HeldNote(int id, int track, int note, int velocity, double? recordStart)
+    private sealed class HeldNote(
+        int id,
+        int track,
+        int note,
+        int velocity,
+        double? recordStart,
+        bool quantizeRecording
+    )
     {
         public int Id { get; } = id;
         public int Track { get; } = track;
         public int Note { get; } = note;
         public int Velocity { get; } = velocity;
         public double? RecordStart { get; set; } = recordStart;
+        public bool QuantizeRecording { get; } = quantizeRecording;
         public bool IsKeyDown { get; set; } = true;
     }
 

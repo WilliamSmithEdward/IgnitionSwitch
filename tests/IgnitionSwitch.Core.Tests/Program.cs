@@ -13,6 +13,14 @@
     ),
     ("Recording quantizes, replaces overdubs, and replays", SequencingTests.Recording),
     (
+        "Recording quantization is optional, per-note, transient, and bounded",
+        QuantizationTests.RecordingPolicy
+    ),
+    (
+        "Selected-track Quantise preserves durations, ownership, collisions, and undo",
+        QuantizationTests.SelectedTrack
+    ),
+    (
         "Incremental recording preserves ordered playback, burst releases, capacity, and note revisions",
         InputStressTests.OrderedInputs
     ),

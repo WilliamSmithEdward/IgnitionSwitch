@@ -283,6 +283,19 @@ public sealed partial class MainWindow : Window, IDisposable
             );
             session.MarkChanged();
         };
+        QuantizeTrackItem.Click += (_, _) =>
+        {
+            _ = session.QuantizeSelectedTrack();
+            RefreshState();
+        };
+        RecordingGridItem.Click += (_, _) =>
+        {
+            if (!updating)
+            {
+                session.RecordingQuantizationEnabled = RecordingGridItem.IsChecked;
+                RefreshState();
+            }
+        };
         ClearButton.Click += async (_, _) => await ClearTrackAsync();
         SaveButton.Click += async (_, _) => await SaveAsync();
         OpenButton.Click += async (_, _) => await OpenAsync();
@@ -458,6 +471,11 @@ public sealed partial class MainWindow : Window, IDisposable
         RefreshVolumes(tracks);
         MetronomeToggle.IsChecked = engine.MetronomeEnabled;
         MuteButton.IsChecked = tracks[engine.SelectedTrack].IsMuted;
+        LoopOptionsButton.IsEnabled = !session.IsInteractionBlocked;
+        QuantizeTrackItem.IsEnabled = !session.IsInteractionBlocked
+            && (engine.IsRecording || tracks[engine.SelectedTrack].NoteCount > 0);
+        RecordingGridItem.IsChecked = session.RecordingQuantizationEnabled;
+        RecordingGridItem.IsEnabled = !session.IsInteractionBlocked;
         SelectedTrackText.Text = tracks[engine.SelectedTrack].Name;
         LoopProgress.Value = engine.BeatPosition;
         timeline.UpdatePosition(engine.BeatPosition, engine.IsPlaying);

@@ -144,6 +144,28 @@ internal sealed partial class StudioSession : IDisposable
         }
     }
 
+    public bool RecordingQuantizationEnabled
+    {
+        get
+        {
+            lock (inputLock)
+            {
+                return Engine.RecordingQuantizationEnabled;
+            }
+        }
+
+        set
+        {
+            lock (inputLock)
+            {
+                if (!disposed && !interactionBlocked)
+                {
+                    Engine.RecordingQuantizationEnabled = value;
+                }
+            }
+        }
+    }
+
     public void Start()
     {
         lock (inputLock)
@@ -274,6 +296,37 @@ internal sealed partial class StudioSession : IDisposable
     public bool Redo()
     {
         return ChangeHistory(true);
+    }
+
+    public bool QuantizeSelectedTrack()
+    {
+        bool changed;
+
+        lock (inputLock)
+        {
+            if (disposed || interactionBlocked)
+            {
+                return false;
+            }
+
+            changed = QuantizeSelectedTrackCore();
+        }
+
+        RefreshFeedback();
+        return changed;
+    }
+
+    private bool QuantizeSelectedTrackCore()
+    {
+        bool wasRecording = Engine.IsRecording;
+        bool changed = Engine.QuantizeSelectedTrack();
+
+        if (changed || wasRecording)
+        {
+            revision++;
+        }
+
+        return changed;
     }
 
     private bool ChangeHistory(bool redo)
@@ -532,6 +585,10 @@ internal sealed partial class StudioSession : IDisposable
     {
         switch (control.Kind)
         {
+            case MusicControlKind.QuantizeSelectedTrack:
+                _ = QuantizeSelectedTrackCore();
+                break;
+
             case MusicControlKind.Undo:
                 _ = ChangeHistoryCore(false);
                 break;

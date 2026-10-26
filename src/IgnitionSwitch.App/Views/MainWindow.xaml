@@ -10,12 +10,12 @@
             HorizontalScrollBarVisibility="Disabled"
             HorizontalScrollMode="Disabled"
             VerticalScrollBarVisibility="Auto">
-            <Grid x:Name="WorkspaceRoot" Padding="24,20,24,12" RowSpacing="16"
+            <Grid x:Name="WorkspaceRoot" Padding="24,20,24,10" RowSpacing="14"
                 MinHeight="{Binding ViewportHeight, ElementName=WorkspaceScroll}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" MinHeight="490" />
+                    <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
@@ -212,7 +212,7 @@
                     </Grid>
                 </Border>
 
-                <Grid x:Name="WorkspaceBody" Grid.Row="2" MinHeight="490">
+                <Grid x:Name="WorkspaceBody" Grid.Row="2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="TrackColumn" Width="244" MinWidth="200" MaxWidth="360" />
                         <ColumnDefinition Width="12" />
@@ -267,15 +267,35 @@
                                 <Grid ColumnSpacing="10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="Loop" Style="{StaticResource PanelHeadingStyle}" />
+                                    <TextBlock Text="Loop" Style="{StaticResource PanelHeadingStyle}"
+                                        VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1" Text="4 bars"
                                         Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" />
                                     <TextBlock x:Name="SelectedTrackText" Grid.Column="2" Text="Velvet keys"
                                         FontSize="12" Foreground="{StaticResource MutedText}"
-                                        VerticalAlignment="Center" />
+                                        VerticalAlignment="Center" TextAlignment="Right"
+                                        TextTrimming="CharacterEllipsis" />
+                                    <Button x:Name="LoopOptionsButton" Grid.Column="3"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        ToolTipService.ToolTip="Loop options"
+                                        AutomationProperties.Name="Loop options">
+                                        <FontIcon Glyph="&#xE712;" FontSize="16" />
+                                        <Button.Flyout>
+                                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                <MenuFlyoutItem x:Name="QuantizeTrackItem"
+                                                    Text="Quantise selected track"
+                                                    AutomationProperties.Name="Quantise selected track to the 1/16 note grid" />
+                                                <MenuFlyoutSeparator />
+                                                <ToggleMenuFlyoutItem x:Name="RecordingGridItem"
+                                                    Text="Record on 1/16 grid" IsChecked="True"
+                                                    AutomationProperties.Name="Quantise new recordings to the 1/16 note grid" />
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                    </Button>
                                 </Grid>
                                 <Grid x:Name="TimelinePanel" Grid.Row="1" MinHeight="110"
                                     AutomationProperties.Name="Four-track recorded loop" />

@@ -3,6 +3,10 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Hardware and UI Quantise share undo, revision, and modal behavior",
+        QuantizeCommandTests.Commands
+    ),
+    (
         "Pad activity retains fast taps, retriggers, and matching hardware feedback",
         PerformanceFeedbackTests.Activity
     ),
