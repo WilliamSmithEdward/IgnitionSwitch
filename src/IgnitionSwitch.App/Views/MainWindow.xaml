@@ -92,14 +92,16 @@
                             AutomationProperties.Name="Keyboard shortcuts">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
-                                    <StackPanel Width="232" Spacing="16" RequestedTheme="Dark">
+                                    <StackPanel Width="280" Spacing="16" RequestedTheme="Dark">
                                         <TextBlock Text="Keyboard shortcuts" Style="{StaticResource FlyoutHeadingStyle}" />
                                         <Grid ColumnSpacing="18" RowSpacing="12">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="56" />
+                                                <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
                                                 <RowDefinition Height="Auto" />
@@ -110,6 +112,10 @@
                                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Record" Style="{StaticResource BodyStyle}" />
                                             <TextBlock Grid.Row="2" Text="Esc" Style="{StaticResource ShortcutKeyStyle}" />
                                             <TextBlock Grid.Row="2" Grid.Column="1" Text="Stop" Style="{StaticResource BodyStyle}" />
+                                            <TextBlock Grid.Row="3" Text="Ctrl + Z" Style="{StaticResource ShortcutKeyStyle}" />
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Undo" Style="{StaticResource BodyStyle}" />
+                                            <TextBlock Grid.Row="4" Text="Ctrl + Shift + Z" Style="{StaticResource ShortcutKeyStyle}" />
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Redo" Style="{StaticResource BodyStyle}" />
                                         </Grid>
                                     </StackPanel>
                                 </Flyout>

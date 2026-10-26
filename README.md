@@ -11,10 +11,11 @@ This is an early working foundation. The Launchkey 37 MK3 comes first; hardware 
 - Track gain, mute, master volume, and tempo controls.
 - A focused loop view, sixteen on-screen drum pads, and resize handles for both workspace splits.
 - Play/pause that preserves position, with a separate stop/rewind action.
+- Matching hardware/application drum-pad hit feedback and bounded Undo/Redo for recording and mixer edits.
 - Save and reopen projects as `.ignition.json` files.
 - Launchkey discovery, verified model identification, mapped transport and session controls, pad feedback, and LCD track labels.
 
-The initial engine has four tracks, four bars, 60–180 BPM, 64 simultaneous voices, and up to 2,048 recorded notes per track. VST hosting, audio import/export, a song arranger, undo, aftertouch synthesis, and synchronization with the hardware arpeggiator's MIDI clock are future work.
+The initial engine has four tracks, four bars, 60–180 BPM, 64 simultaneous voices, and up to 2,048 recorded notes per track. VST hosting, audio import/export, a song arranger, aftertouch synthesis, and synchronization with the hardware arpeggiator's MIDI clock are future work.
 
 ## Build and run
 
@@ -38,6 +39,8 @@ The Windows App SDK and application dependencies are pinned in the project files
 Connect the Launchkey by USB, select a track, and press **Record** or **R** to capture a phrase. Press Record again to keep it looping; select another track to add a layer. Drum mode plays the drum track, and recording uses a sixteenth-note grid.
 
 **Space** plays/pauses at the current position; **Esc** stops and rewinds. Pause ends recording and keeps live playing available. Choose **Save** to store the session. Connection/audio details are in **Devices**, and **?** opens shortcut help.
+
+Use **Ctrl+Z** / **Ctrl+Shift+Z**, or hardware **Undo** / **Shift+Undo**, to reverse or restore recording parts and mixer edits. Drum hits flash the matching pad on the controller and in the app. The [production-polish goal](docs/production_polish.md) tracks the remaining controls and verification.
 
 Drag the handle beside Tracks to change its width, or the handle between Loop and Drums to change their heights. Tab to a handle and use its arrow keys for keyboard resizing. The layout follows the window size without horizontal scrolling.
 

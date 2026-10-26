@@ -57,6 +57,12 @@ Space invokes play/pause, R toggles recording, and Esc stops/rewinds. The stop s
 
 `StudioSession` remembers the track that owns each incoming performance note, so changing selection does not send its release to another instrument. Per-track/pitch owner counts keep overlapping MIDI channels independent: the final owner releases the sound. The conventional MIDI drum channel routes independently to the drum track. Sustain follows held/newly selected melodic tracks and releases all affected tracks on pedal-up. Supported controller actions are normalized before reaching this coordinator. Applying a project resets engine and coordinator note/pedal ownership under the same input lock.
 
+Live input and on-screen pads share the session's note entry points and performance-activity notifications. `PadActivityMailbox` retains an onset sequence, velocity and final held state per MIDI note, so a press/release entirely between UI frames still flashes once. The UI consumes these states on its existing 16 ms tick; native button semantics, hit holds and compositor fades belong to disposable pad presenters. The controller supplies immutable note order and columns, keeping the Launchkey's physical matrix out of the generic presentation code.
+
+Hardware hit feedback is queued without MIDI output on the input thread. A separate worker coalesces changes, serializes sends, keeps short hits visible and restores the current base color. Mapping and activity synchronization never hold the output lock while processing notes. Idle and unchanged held feedback do not continuously wake a worker.
+
+Core history stores bounded note deltas and scalar changes rather than project copies on each input. Recording parts seal at transport/recording boundaries or an actual mixer/clear edit. Scalar gestures coalesce until explicit completion, a different edit or 500 ms idle. Undo and Redo end recording, preserve beat/live ownership and update only affected sequenced notes. Loading a project clears history; the JSON schema stays unchanged.
+
 The session maintains a content revision and a saved revision. `CaptureForSave` returns a snapshot with its revision; a completed write marks only that revision saved. Changes after capture remain unsaved. Modal file and confirmation operations stop/finalize recording and block project mutations while allowing live auditioning without changing recorded content.
 
 `SessionStore` shares its validation with `ApplySession` and `SaveAsync`. Projects are versioned JSON, limited to 4 MiB, and checked for supported track/loop counts, finite gains and tempo, bounded names, and valid MIDI events. Loading clones collections before applying them. Saving writes a temporary file beside the target, flushes it, then replaces the target.
@@ -83,6 +89,6 @@ The App checks link the coordinator and contracts instead of copying its impleme
 
 Another controller should implement the existing contracts, provide a verified identity/profile and command mapper, and get its own maintained device reference and fixtures. Keep its layout and packet assumptions inside its adapter.
 
-Additional instruments belong in the synthesis/domain layer. Expanding track count, loop length, or saved automation needs an explicit project-schema evolution and corresponding bounds, tests, and coverage updates. VST hosting, sample/audio tracks, effects, export, an arranger, undo, expression synthesis, and external clock synchronization are not present yet.
+Additional instruments belong in the synthesis/domain layer. Expanding track count, loop length, or saved automation needs an explicit project-schema evolution and corresponding bounds, tests, and coverage updates. VST hosting, sample/audio tracks, effects, export, an arranger, expression synthesis, and external clock synchronization are not present yet.
 
 See the [engine API coverage inventory](in_memory_engine/music_api_coverage.md) and [Launchkey implementation reference](devices/novation_launchkey_mk3_37.md) for current behavior and evidence.

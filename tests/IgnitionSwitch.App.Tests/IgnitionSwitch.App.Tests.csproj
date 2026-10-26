@@ -9,6 +9,8 @@
     <ProjectReference Include="../../src/IgnitionSwitch.Midi/IgnitionSwitch.Midi.csproj" />
     <!-- Compile the actual session coordinator with fake boundary adapters; do not copy production logic. -->
     <Compile Include="../../src/IgnitionSwitch.App/Services/StudioSession.cs" Link="Services/StudioSession.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Services/PerformanceActivity.cs" Link="Services/PerformanceActivity.cs" />
+    <Compile Include="../../src/IgnitionSwitch.App/Presentation/PadActivityMailbox.cs" Link="Presentation/PadActivityMailbox.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Services/ControllerFactory.cs" Link="Services/ControllerFactory.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Audio/IAudioPlayback.cs" Link="Audio/IAudioPlayback.cs" />
     <Compile Include="../../src/IgnitionSwitch.App/Audio/SharedAudioBufferPolicy.cs" Link="Audio/SharedAudioBufferPolicy.cs" />

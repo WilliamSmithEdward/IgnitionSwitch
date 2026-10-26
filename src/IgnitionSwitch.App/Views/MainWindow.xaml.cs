@@ -26,6 +26,10 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly List<TrackControls> trackControls = [];
     private readonly List<SliderMotion> trackMotions = [];
+    private readonly PadActivityMailbox padActivity = new();
+    private readonly long[] padSequences = new long[128];
+    private readonly bool[] padPressed = new bool[128];
+    private IReadOnlyList<PadControls> padControls = [];
     private bool updating;
     private bool closingAllowed;
     private bool dialogOpen;
@@ -35,6 +39,8 @@ public sealed partial class MainWindow : Window, IDisposable
     private long lastStateRefresh;
     private double minimumWindowScale;
     private int mixerRefreshRequested;
+    private int padResetRequested;
+    private int stateRefreshRequested;
     private string sessionName = "Untitled";
 
     /// <summary>Creates the workspace and initializes its audio and hardware services on load.</summary>
@@ -55,6 +61,8 @@ public sealed partial class MainWindow : Window, IDisposable
         BuildInstruments();
         masterMotion = new SliderMotion(MasterSlider);
         session.Controller.ControlReceived += OnControllerControlReceived;
+        session.PerformanceChanged += OnPerformanceChanged;
+        session.PerformanceReset += OnPerformanceReset;
         workspaceLayout = new WorkspaceLayout(
             WorkspaceScroll,
             WorkspaceRoot,
@@ -67,8 +75,11 @@ public sealed partial class MainWindow : Window, IDisposable
             LoopResizeHandle
         );
         WireControls();
+        Content.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
         timer.Tick += (_, _) =>
         {
+            RefreshPadActivity();
+
             if (Interlocked.Exchange(ref mixerRefreshRequested, 0) != 0)
             {
                 RefreshVolumes(session.Engine.Tracks);
@@ -76,7 +87,10 @@ public sealed partial class MainWindow : Window, IDisposable
 
             timeline.UpdatePosition(session.Engine.BeatPosition, session.Engine.IsPlaying);
 
-            if (Environment.TickCount64 - lastStateRefresh >= 100)
+            if (
+                Interlocked.Exchange(ref stateRefreshRequested, 0) != 0
+                || Environment.TickCount64 - lastStateRefresh >= 100
+            )
             {
                 RefreshState();
             }
@@ -106,6 +120,14 @@ public sealed partial class MainWindow : Window, IDisposable
 
         disposed = true;
         timer.Stop();
+
+        foreach (PadControls pad in padControls)
+        {
+            pad.Dispose();
+        }
+
+        session.PerformanceChanged -= OnPerformanceChanged;
+        session.PerformanceReset -= OnPerformanceReset;
         session.Controller.ControlReceived -= OnControllerControlReceived;
         masterMotion.Dispose();
 
@@ -134,6 +156,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 index
             );
             trackMotions.Add(new SliderMotion(controls.Volume));
+            WireEditGesture(controls.Volume);
             controls.Button.Click += (_, _) =>
             {
                 session.SelectTrack(trackIndex);
@@ -154,7 +177,14 @@ public sealed partial class MainWindow : Window, IDisposable
             TrackPanel.Children.Add(panel);
         }
 
-        InstrumentControls.CreatePads(PadPanel, PreviewNoteOn, PreviewNoteOff);
+        ControllerPadLayout? layout = session.Controller.DrumPadLayout;
+        padControls = InstrumentControls.CreatePads(
+            PadPanel,
+            PreviewNoteOn,
+            PreviewNoteOff,
+            layout?.Notes,
+            layout?.Columns ?? 8
+        );
     }
 
     private void ResizeWorkspace()
@@ -242,6 +272,7 @@ public sealed partial class MainWindow : Window, IDisposable
                 session.MarkChanged();
             }
         };
+        WireEditGesture(MasterSlider);
         MetronomeToggle.Click += (_, _) =>
             session.Engine.MetronomeEnabled = MetronomeToggle.IsChecked == true;
         MuteButton.Click += (_, _) =>
@@ -258,11 +289,69 @@ public sealed partial class MainWindow : Window, IDisposable
         AddShortcut(VirtualKey.Space, session.TogglePlayback);
         AddShortcut(VirtualKey.R, session.ToggleRecording);
         AddShortcut(VirtualKey.Escape, session.Stop);
+        AddShortcut(
+            VirtualKey.Z,
+            () =>
+            {
+                _ = session.Undo();
+            },
+            VirtualKeyModifiers.Control
+        );
+        AddShortcut(
+            VirtualKey.Z,
+            () =>
+            {
+                _ = session.Redo();
+            },
+            VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift
+        );
     }
 
-    private void AddShortcut(VirtualKey key, Action action)
+    private void WireEditGesture(Slider slider)
     {
-        var shortcut = new KeyboardAccelerator { Key = key };
+        slider.AddHandler(
+            UIElement.PointerReleasedEvent,
+            new PointerEventHandler((_, _) => CompleteEdit()),
+            true
+        );
+        slider.PointerCaptureLost += (_, _) => CompleteEdit();
+        slider.KeyUp += (_, args) =>
+        {
+            if (
+                args.Key is VirtualKey.Left
+                    or VirtualKey.Right
+                    or VirtualKey.Up
+                    or VirtualKey.Down
+                    or VirtualKey.Home
+                    or VirtualKey.End
+                    or VirtualKey.PageUp
+                    or VirtualKey.PageDown
+            )
+            {
+                CompleteEdit();
+            }
+        };
+    }
+
+    private void CompleteEdit()
+    {
+        if (!disposed)
+        {
+            session.Engine.CommitEdit();
+        }
+    }
+
+    private void AddShortcut(
+        VirtualKey key,
+        Action action,
+        VirtualKeyModifiers modifiers = VirtualKeyModifiers.None
+    )
+    {
+        var shortcut = new KeyboardAccelerator
+        {
+            Key = key,
+            Modifiers = modifiers
+        };
         shortcut.Invoked += (_, args) =>
         {
             if (
@@ -283,24 +372,60 @@ public sealed partial class MainWindow : Window, IDisposable
 
     private void PreviewNoteOn(int track, int note)
     {
-        session.Engine.NoteOn(track, note, 100);
-
-        if (session.Engine.IsRecording)
-        {
-            session.MarkChanged();
-        }
+        session.NoteOn(track, note, 100);
     }
 
     private void PreviewNoteOff(int track, int note)
     {
-        if (!disposed)
-        {
-            session.Engine.NoteOff(track, note);
+        session.NoteOff(track, note);
+    }
 
-            if (session.Engine.IsRecording)
+    private void OnPerformanceChanged(object? sender, PerformanceActivity activity)
+    {
+        if (activity.Track == 3)
+        {
+            padActivity.Record(activity.Note, activity.Velocity, activity.IsPressed);
+        }
+    }
+
+    private void OnPerformanceReset(object? sender, EventArgs args)
+    {
+        padActivity.Clear();
+        _ = Interlocked.Exchange(ref padResetRequested, 1);
+    }
+
+    private void RefreshPadActivity()
+    {
+        if (Interlocked.Exchange(ref padResetRequested, 0) != 0)
+        {
+            Array.Clear(padSequences);
+            Array.Clear(padPressed);
+
+            foreach (PadControls pad in padControls)
             {
-                session.MarkChanged();
+                pad.Release();
             }
+        }
+
+        foreach (PadControls pad in padControls)
+        {
+            PadActivity state = padActivity.Read(pad.Note);
+
+            if (state.Velocity > 0 && state.Sequence != padSequences[pad.Note])
+            {
+                pad.Hit(state.Velocity);
+            }
+
+            if (
+                !state.IsPressed
+                && (padPressed[pad.Note] || state.Sequence != padSequences[pad.Note])
+            )
+            {
+                pad.Release();
+            }
+
+            padSequences[pad.Note] = state.Sequence;
+            padPressed[pad.Note] = state.IsPressed;
         }
     }
 
@@ -397,7 +522,10 @@ public sealed partial class MainWindow : Window, IDisposable
         if (control.Kind is MusicControlKind.SetTrackVolume or MusicControlKind.SetMasterVolume)
         {
             _ = Interlocked.Exchange(ref mixerRefreshRequested, 1);
+            return;
         }
+
+        _ = Interlocked.Exchange(ref stateRefreshRequested, 1);
     }
 
     private void RefreshVolumes(IReadOnlyList<TrackState> tracks)

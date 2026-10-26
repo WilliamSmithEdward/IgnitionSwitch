@@ -3,7 +3,6 @@ using IgnitionSwitch.Core.Domain;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 
@@ -96,100 +95,71 @@ internal static class InstrumentControls
         return new TrackControls(button, name, detail, slider);
     }
 
-    public static void CreatePads(Grid grid, Action<int, int> noteOn, Action<int, int> noteOff)
+    public static IReadOnlyList<PadControls> CreatePads(
+        Grid grid,
+        Action<int, int> noteOn,
+        Action<int, int> noteOff,
+        IReadOnlyList<int>? noteMap = null,
+        int columns = 8
+    )
     {
-        for (int column = 0; column < 8; column++)
+        int count = noteMap?.Count ?? 16;
+
+        if (count is < 1 or > 128 || noteMap?.Any(note => note is < 0 or > 127) == true)
+        {
+            throw new ArgumentException(
+                "A pad map must contain 1–128 valid MIDI notes.",
+                nameof(noteMap)
+            );
+        }
+
+        ArgumentOutOfRangeException.ThrowIfLessThan(columns, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(columns, count);
+        var pads = new List<PadControls>(count);
+
+        for (int column = 0; column < columns; column++)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition());
         }
 
-        grid.RowDefinitions.Add(new RowDefinition());
-        grid.RowDefinitions.Add(new RowDefinition());
+        int rows = (count + columns - 1) / columns;
 
-        for (int index = 0; index < 16; index++)
+        for (int row = 0; row < rows; row++)
         {
-            int note = index + 36;
-            var content = new TextBlock
+            grid.RowDefinitions.Add(new RowDefinition());
+        }
+
+        for (int index = 0; index < count; index++)
+        {
+            int note = noteMap?[index] ?? (index + 36);
+            string name = note is >= 36 and <= 51 ? DrumNames[note - 36] : $"Note {note}";
+            var content = new Grid();
+            var feedback = new Border { IsHitTestVisible = false };
+            content.Children.Add(feedback);
+            content.Children.Add(new TextBlock
             {
-                Text = DrumNames[index].Replace("percussion", "perc.", StringComparison.Ordinal),
+                Text = name.Replace("percussion", "perc.", StringComparison.Ordinal),
                 FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(12, 8, 12, 8),
                 TextWrapping = TextWrapping.Wrap,
                 MaxLines = 2,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center
-            };
+            });
             var button = new Button
             {
                 Content = content,
                 Style = (Style)Application.Current.Resources["PadButtonStyle"]
             };
-            Grid.SetRow(button, index < 8 ? 1 : 0);
-            Grid.SetColumn(button, index % 8);
-            AutomationProperties.SetName(button, $"Play {DrumNames[index]}");
-            ToolTipService.SetToolTip(button, $"{DrumNames[index]} · MIDI {note}");
-            AttachNotes(button, 3, note, noteOn, noteOff);
+            Grid.SetRow(button, index / columns);
+            Grid.SetColumn(button, index % columns);
+            AutomationProperties.SetName(button, $"Play {name}");
+            ToolTipService.SetToolTip(button, $"{name} · MIDI {note}");
+            pads.Add(new PadControls(note, button, feedback, noteOn, noteOff));
             grid.Children.Add(button);
         }
-    }
 
-    private static void AttachNotes(
-        Button button,
-        int track,
-        int note,
-        Action<int, int> noteOn,
-        Action<int, int> noteOff
-    )
-    {
-        int owner = -1;
-        bool pointerClick = false;
-
-        void Release()
-        {
-            if (owner < 0)
-            {
-                return;
-            }
-
-            noteOff(owner, note);
-            owner = -1;
-        }
-
-        button.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, args) =>
-            {
-                if (!args.GetCurrentPoint(button).Properties.IsLeftButtonPressed)
-                {
-                    return;
-                }
-
-                Release();
-                pointerClick = true;
-                owner = track;
-                noteOn(owner, note);
-                _ = button.CapturePointer(args.Pointer);
-            }), true);
-        button.AddHandler(
-            UIElement.PointerReleasedEvent,
-            new PointerEventHandler((_, _) => Release()),
-            true
-        );
-        button.PointerCaptureLost += (_, _) => Release();
-        button.Click += (_, _) =>
-        {
-            if (pointerClick)
-            {
-                pointerClick = false;
-                return;
-            }
-
-            noteOn(track, note);
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
-            timer.Tick += (_, _) =>
-            {
-                timer.Stop();
-                noteOff(track, note);
-            };
-            timer.Start();
-        };
+        return pads;
     }
 }

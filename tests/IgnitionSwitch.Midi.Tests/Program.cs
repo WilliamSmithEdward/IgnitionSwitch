@@ -25,7 +25,10 @@
     (
         "Captured Drum-mode input routes as performance and retains releases across mode changes",
         PerformanceRoutingTests.Routing
-    )
+    ),
+    ("Pad layouts are immutable and follow the physical MK3 note order", PadFeedbackTests.Layout),
+    ("Pad hits coalesce bursts and retain rapid taps and held notes", PadFeedbackTests.Hits),
+    ("Pad feedback respects layout, mute, retrigger, and reset state", PadFeedbackTests.Context)
 ];
 
 int failures = 0;

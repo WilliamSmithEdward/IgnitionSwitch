@@ -22,5 +22,9 @@ public enum MusicControlKind
     /// <summary>Sets the master normalized gain in Value.</summary>
     SetMasterVolume,
     /// <summary>Sets the tempo in Value, expressed in beats per minute.</summary>
-    SetTempo
+    SetTempo,
+    /// <summary>Reverts the latest available project edit.</summary>
+    Undo,
+    /// <summary>Restores the latest reverted project edit.</summary>
+    Redo
 }

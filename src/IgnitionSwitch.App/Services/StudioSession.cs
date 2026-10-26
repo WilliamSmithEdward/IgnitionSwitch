@@ -10,7 +10,9 @@ internal sealed partial class StudioSession : IDisposable
     private readonly Lock inputLock = new();
     private readonly Lock feedbackLock = new();
     private readonly Dictionary<(int Channel, int Note), int> noteOwners = [];
+    private readonly HashSet<(int Track, int Note)> previewOwners = [];
     private readonly int[] activeNoteOwners = new int[WorkstationEngine.TrackCount * 128];
+    private readonly bool[] activePadFeedback = new bool[128];
     private readonly HashSet<int> sustainedTracks = [];
     private ControllerFeedback? previousFeedback;
     private long revision;
@@ -39,6 +41,56 @@ internal sealed partial class StudioSession : IDisposable
     public WorkstationEngine Engine { get; }
     public IMusicController Controller { get; }
     public IAudioPlayback Audio { get; }
+
+    public event EventHandler<PerformanceActivity>? PerformanceChanged;
+    public event EventHandler? PerformanceReset;
+
+    public void NoteOn(int track, int note, int velocity)
+    {
+        lock (inputLock)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            ValidatePerformanceNote(track, note);
+
+            if (velocity == 0)
+            {
+                ReleasePreviewNote(track, note);
+                return;
+            }
+
+            Engine.NoteOn(track, note, velocity);
+
+            if (previewOwners.Add((track, note)))
+            {
+                activeNoteOwners[(track * 128) + note]++;
+            }
+
+            ReportPerformance(track, note, velocity, true);
+
+            if (Engine.IsRecording)
+            {
+                revision++;
+            }
+        }
+    }
+
+    public void NoteOff(int track, int note)
+    {
+        lock (inputLock)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            ValidatePerformanceNote(track, note);
+            ReleasePreviewNote(track, note);
+        }
+    }
 
     public long Revision
     {
@@ -214,6 +266,46 @@ internal sealed partial class StudioSession : IDisposable
         RefreshFeedback();
     }
 
+    public bool Undo()
+    {
+        return ChangeHistory(false);
+    }
+
+    public bool Redo()
+    {
+        return ChangeHistory(true);
+    }
+
+    private bool ChangeHistory(bool redo)
+    {
+        bool changed;
+
+        lock (inputLock)
+        {
+            if (disposed || interactionBlocked)
+            {
+                return false;
+            }
+
+            changed = ChangeHistoryCore(redo);
+        }
+
+        RefreshFeedback();
+        return changed;
+    }
+
+    private bool ChangeHistoryCore(bool redo)
+    {
+        bool changed = redo ? Engine.Redo() : Engine.Undo();
+
+        if (changed)
+        {
+            revision++;
+        }
+
+        return changed;
+    }
+
     public void RefreshFeedback()
     {
         lock (feedbackLock)
@@ -383,6 +475,7 @@ internal sealed partial class StudioSession : IDisposable
                 activeNoteOwners[(track * 128) + input.Number]++;
                 SustainTrackIfNeeded(track);
                 Engine.NoteOn(track, input.Number, input.Value);
+                ReportPerformance(track, input.Number, input.Value, true);
 
                 if (Engine.IsRecording)
                 {
@@ -439,6 +532,14 @@ internal sealed partial class StudioSession : IDisposable
     {
         switch (control.Kind)
         {
+            case MusicControlKind.Undo:
+                _ = ChangeHistoryCore(false);
+                break;
+
+            case MusicControlKind.Redo:
+                _ = ChangeHistoryCore(true);
+                break;
+
             case MusicControlKind.TogglePlayback:
                 if (Audio.IsRunning)
                 {
@@ -587,28 +688,70 @@ internal sealed partial class StudioSession : IDisposable
 
     private bool ReleaseNoteOwner((int Channel, int Note) key)
     {
-        if (!noteOwners.Remove(key, out int track))
+        return noteOwners.Remove(key, out int track) && ReleasePerformanceOwner(track, key.Note);
+    }
+
+    private bool ReleasePerformanceOwner(int track, int note)
+    {
+        int index = (track * 128) + note;
+
+        if (--activeNoteOwners[index] != 0)
         {
             return false;
         }
 
-        int index = (track * 128) + key.Note;
-        activeNoteOwners[index]--;
-
-        if (activeNoteOwners[index] != 0)
-        {
-            return false;
-        }
-
-        Engine.NoteOff(track, key.Note);
+        Engine.NoteOff(track, note);
+        ReportPerformance(track, note, 0, false);
         return true;
+    }
+
+    private void ReleasePreviewNote(int track, int note)
+    {
+        if (
+            previewOwners.Remove((track, note))
+            && ReleasePerformanceOwner(track, note)
+            && Engine.IsRecording
+        )
+        {
+            revision++;
+        }
+    }
+
+    private static void ValidatePerformanceNote(int track, int note)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(track);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(track, WorkstationEngine.TrackCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(note);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(note, 127);
     }
 
     private void ClearPerformanceState()
     {
+        for (int note = 0; note < activePadFeedback.Length; note++)
+        {
+            if (activePadFeedback[note])
+            {
+                Controller.UpdatePadFeedback(new PadFeedback(note, 0, false));
+            }
+        }
+
         noteOwners.Clear();
+        previewOwners.Clear();
         Array.Clear(activeNoteOwners);
+        Array.Clear(activePadFeedback);
         sustainedTracks.Clear();
         pedalDown = false;
+        PerformanceReset?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ReportPerformance(int track, int note, int velocity, bool pressed)
+    {
+        if (track == 3)
+        {
+            activePadFeedback[note] = pressed;
+            Controller.UpdatePadFeedback(new PadFeedback(note, velocity, pressed));
+        }
+
+        PerformanceChanged?.Invoke(this, new PerformanceActivity(track, note, velocity, pressed));
     }
 }

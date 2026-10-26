@@ -3,6 +3,14 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Pad activity retains fast taps, retriggers, and matching hardware feedback",
+        PerformanceFeedbackTests.Activity
+    ),
+    (
+        "UI and hardware Undo/Redo preserve revision and modal semantics",
+        PerformanceFeedbackTests.HistoryCommands
+    ),
+    (
         "Shared audio buffer requests follow driver periods with a positive bounded fallback",
         AudioBufferTests.SharedPeriod
     ),

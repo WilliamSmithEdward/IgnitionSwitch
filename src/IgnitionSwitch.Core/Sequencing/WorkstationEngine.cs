@@ -1,11 +1,12 @@
 using IgnitionSwitch.Core.Audio;
 using IgnitionSwitch.Core.Domain;
 using IgnitionSwitch.Core.Persistence;
+using IgnitionSwitch.Core.Sequencing.History;
 
 namespace IgnitionSwitch.Core.Sequencing;
 
 /// <summary>A thread-safe, sample-clocked four-track synthesizer and MIDI loop recorder.</summary>
-public sealed class WorkstationEngine : IDisposable
+public sealed partial class WorkstationEngine : IDisposable
 {
     /// <summary>The fixed rendering sample rate in frames per second.</summary>
     public const int SampleRate = 48000;
@@ -70,6 +71,7 @@ public sealed class WorkstationEngine : IDisposable
             lock (_sync)
             {
                 ThrowIfDisposed();
+                _history.RecordScalar(new(HistoryProperty.Tempo, -1, _tempo, value), true);
                 _tempo = value;
             }
         }
@@ -158,6 +160,10 @@ public sealed class WorkstationEngine : IDisposable
             lock (_sync)
             {
                 ThrowIfDisposed();
+                _history.RecordScalar(
+                    new(HistoryProperty.MasterVolume, -1, _masterVolume, value),
+                    true
+                );
                 _masterVolume = value;
             }
         }
@@ -218,6 +224,7 @@ public sealed class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
+            _history.Commit();
             _isPlaying = true;
         }
     }
@@ -233,6 +240,7 @@ public sealed class WorkstationEngine : IDisposable
         {
             ThrowIfDisposed();
             FinalizeHeldRecordings();
+            _history.Commit();
             _isPlaying = false;
             _isRecording = false;
             _clickSamples = 0;
@@ -247,6 +255,7 @@ public sealed class WorkstationEngine : IDisposable
         {
             ThrowIfDisposed();
             FinalizeHeldRecordings();
+            _history.Commit();
             _isPlaying = false;
             _isRecording = false;
             _absoluteBeat = 0;
@@ -293,10 +302,12 @@ public sealed class WorkstationEngine : IDisposable
             if (_isRecording)
             {
                 FinalizeHeldRecordings();
+                _history.Commit();
             }
 
             else
             {
+                _history.Commit();
                 _isPlaying = true;
             }
 
@@ -437,6 +448,7 @@ public sealed class WorkstationEngine : IDisposable
         {
             ThrowIfDisposed();
             FinalizeHeldRecordings();
+            _history.Commit();
             _held.Clear();
             _voices.Clear();
             _pitchRatio = 1;
@@ -458,6 +470,14 @@ public sealed class WorkstationEngine : IDisposable
 
             if (selected.Notes.Count > 0)
             {
+                _history.Commit();
+
+                for (int index = selected.Notes.Count - 1; index >= 0; index--)
+                {
+                    StoredNote stored = selected.Notes[index];
+                    _history.RecordNote(new(_selectedTrack, stored.Id, index, stored.Note, null));
+                }
+
                 foreach (StoredNote stored in selected.Notes)
                 {
                     _ = _pendingLoopStarts.Remove(stored.Id);
@@ -466,6 +486,7 @@ public sealed class WorkstationEngine : IDisposable
                 RemoveScheduledTrack(_selectedTrack);
                 selected.Notes.Clear();
                 _noteRevision++;
+                _history.Commit();
             }
 
             foreach (HeldNote held in _held.Values.Where(held => held.Track == _selectedTrack))
@@ -485,6 +506,15 @@ public sealed class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
+            _history.RecordScalar(
+                new(
+                    HistoryProperty.TrackMute,
+                    track,
+                    _tracks[track].IsMuted ? 1 : 0,
+                    muted ? 1 : 0
+                ),
+                false
+            );
             _tracks[track].IsMuted = muted;
         }
     }
@@ -498,6 +528,10 @@ public sealed class WorkstationEngine : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
+            _history.RecordScalar(
+                new(HistoryProperty.TrackVolume, track, _tracks[track].Volume, volume),
+                true
+            );
             _tracks[track].Volume = volume;
         }
     }
@@ -669,6 +703,7 @@ public sealed class WorkstationEngine : IDisposable
 
             RebuildSchedule();
             _noteRevision++;
+            _history.Reset();
         }
     }
 
@@ -686,6 +721,7 @@ public sealed class WorkstationEngine : IDisposable
             _held.Clear();
             _schedule.Clear();
             _pendingLoopStarts.Clear();
+            _history.Reset();
             _isPlaying = false;
             _isRecording = false;
             _disposed = true;
@@ -791,6 +827,7 @@ public sealed class WorkstationEngine : IDisposable
         );
         Track track = _tracks[held.Track];
         StoredNote? replacement = null;
+        int replacementIndex = -1;
         bool removedDuplicate = false;
 
         for (int index = track.Notes.Count - 1; index >= 0; index--)
@@ -809,10 +846,12 @@ public sealed class WorkstationEngine : IDisposable
             if (replacement is null)
             {
                 replacement = stored;
+                replacementIndex = index;
             }
 
             else
             {
+                _history.RecordNote(new(held.Track, stored.Id, index, stored.Note, null));
                 track.Notes.RemoveAt(index);
                 removedDuplicate = true;
             }
@@ -830,10 +869,16 @@ public sealed class WorkstationEngine : IDisposable
         {
             replacement = new StoredNote(NextVoiceId(), recorded);
             track.Notes.Add(replacement);
+            _history.RecordNote(
+                new(held.Track, replacement.Id, track.Notes.Count - 1, null, recorded)
+            );
         }
 
         else
         {
+            _history.RecordNote(
+                new(held.Track, replacement.Id, replacementIndex, replacement.Note, recorded)
+            );
             replacement.Note = recorded;
         }
 

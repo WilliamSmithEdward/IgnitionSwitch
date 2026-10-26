@@ -68,7 +68,7 @@ Statuses below describe code currently present. The identity/connection and appl
 | Top session pads 1–4 | Select tracks 1–4. | More tracks/scenes are not implemented. |
 | Bottom session pads 1–4 | Toggle mute for tracks 1–4. | Stop/Solo/Mute mode cycling and per-clip launch behavior. |
 | Remaining session pads | Unassigned and unlit. | Additional track/clip functions. |
-| Drum pad mode | Notes 36–51 on the default drum channel route to the drum track from the performance input or verified Drum-mode control input. Returning to Session still releases held pads. Entering Drum mode lights all 16 pads blue; muted drums use red. William confirmed blue lighting and audible drum hits after the correction. | Muted red-light verification, bank scrolling, strike animation and individual-pad sound review. |
+| Drum pad mode | Notes 36–51 on the default drum channel route to the drum track from the performance input or verified Drum-mode control input. Returning to Session still releases held pads. Base colors are blue or muted red; hits request white for at least 80 ms and stay bright while held. Matching app pads use velocity-sensitive feedback and fade after release. William confirmed base blue lighting and audible hits in `3fe448d`; the newer hit feedback remains to be verified physically. | White-hit/restore and muted red-light verification, bank scrolling and individual-pad sound review. |
 | Pots 1–4 | Track gains: keys, bass, pad, drums. Audio targets apply directly; the on-screen gain controls use visual easing and coalesce feedback on the next UI tick. | Pickup and value synchronization; physical fast-turn review. |
 | Pot 5 | Master gain, with the same visual feedback behavior as track gains. | Physical response check. |
 | Pot 6 | Project tempo, 60–180 BPM. | Hardware arpeggiator clock synchronization. |
@@ -83,7 +83,7 @@ Statuses below describe code currently present. The identity/connection and appl
 | Loop | No button command yet; the engine currently uses a fixed four-bar loop. | An explicit loop behavior/UI and button mapping. |
 | Capture MIDI | No retrospective capture command. | Rolling note history and capture semantics. |
 | Quantise | No button command. Recording already uses the engine's current grid. | A dedicated quantise operation and feedback. |
-| Undo / Shift+Undo | No undo/redo command. | Session edit history. |
+| Undo / Shift+Undo | Undo / Redo the latest recording part or mixer edit. DAW channel 1 CC108 tracks Shift; channel 16 CC77 invokes the command on press. History is bounded and resets when loading another project. | Physical gesture/recording review and history descriptions. |
 | Scene up/down; Scene Launch | No application scene command. Native chord/menu functions remain device-owned. | Scene/bank navigation and launching. |
 | Stop/Solo/Mute button | No application mode-cycle command; lower session row currently remains mute. | Implement the hardware's contextual modes. |
 | Device Select / Device Lock | Alternate pad mode reports are recognized; no device browser/lock command. | Device selection, parameter pages and lock semantics. |
@@ -302,8 +302,8 @@ Easy Start can expose a Novation onboarding USB drive. That drive is not a MIDI 
 | Bounded input decoding | `src/IgnitionSwitch.Midi/Protocol/MidiMessageParser.cs` |
 | Windows port lifecycle and feedback | `src/IgnitionSwitch.Midi/Devices/LaunchkeyController.cs`, `ControllerSession.cs` |
 | Generic command execution and note routing | `src/IgnitionSwitch.App/Services/StudioSession.cs` |
-| Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: eight groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, mode-aware commands and captured Drum-pad routing across mode changes. |
-| Application input checks | `tests/IgnitionSwitch.App.Tests`: 11 groups in the confirmed run, retaining shared-audio buffer, transport, save-revision, feedback and shutdown checks alongside chord-burst acceptance, overlapping-channel ownership, modal audition and atomic project replacement. No timing thresholds or physical-device I/O are used by these checks. |
+| Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: 11 groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, modes/Undo/Shift+Undo, captured Drum routing, immutable pad layouts and deterministic hit feedback. |
+| Application input checks | `tests/IgnitionSwitch.App.Tests`: 13 groups including shared-audio buffer, transport, save-revision, feedback/shutdown, chord bursts, overlapping ownership, modal audition, project replacement, pad-activity mailbox and Undo/Redo integration. No physical-device I/O is used by these checks. |
 
 Run `dotnet run --project tests/IgnitionSwitch.Midi.Tests --no-restore` after the project has been restored. These checks do not open MIDI ports. The initial library/tests passed strict .NET builds with zero diagnostics; rerun verification after relevant changes.
 

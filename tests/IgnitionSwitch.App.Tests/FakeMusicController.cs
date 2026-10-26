@@ -13,6 +13,8 @@ internal sealed class FakeMusicController : IMusicController
     public ControllerIdentity? Identity { get; } = new("Test", "Independent controller", "1");
     public IReadOnlyList<MidiEndpointInfo> Endpoints { get; } = [];
     public bool IsDisposed { get; private set; }
+    public ControllerPadLayout? DrumPadLayout { get; set; }
+    public List<PadFeedback> PadFeedbackEvents { get; } = [];
     public List<ControllerFeedback> Feedback { get; } = [];
 
     public void Connect()
@@ -37,6 +39,12 @@ internal sealed class FakeMusicController : IMusicController
     {
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         Feedback.Add(feedback);
+    }
+
+    public void UpdatePadFeedback(PadFeedback feedback)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        PadFeedbackEvents.Add(feedback);
     }
 
     public void EmitInput(MidiInputEvent input)

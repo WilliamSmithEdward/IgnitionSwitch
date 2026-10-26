@@ -18,6 +18,15 @@
     ),
     ("Notes spanning the loop boundary preserve their duration", SequencingTests.WrappingNote),
     ("Track mute, clear, and gain affect playback", SequencingTests.Tracks),
+    (
+        "Recording, held durations, replacement, and clear undo in chronological groups",
+        HistoryTests.Notes
+    ),
+    (
+        "Mixer gestures coalesce, redo branches remain valid, and project loads reset history",
+        HistoryTests.MixerAndLifecycle
+    ),
+    ("Undo history remains bounded by step and note-delta budgets", HistoryTests.Bounds),
     ("Invalid controls and buffers fail before rendering", ValidationTests.Controls),
     (
         "Malformed, unsupported, oversized, and nonfinite projects are rejected",

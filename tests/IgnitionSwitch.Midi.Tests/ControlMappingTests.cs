@@ -1,5 +1,6 @@
 using IgnitionSwitch.Midi.Contracts;
 using IgnitionSwitch.Midi.Profiles;
+using IgnitionSwitch.Midi.Protocol;
 
 internal static class ControlMappingTests
 {
@@ -106,6 +107,84 @@ internal static class ControlMappingTests
             !mapper.TryMap(Cc(21, -1), out _) && !mapper.TryMap(Cc(21, 128), out _),
             "Unvalidated control value escaped normalization bounds."
         );
+        ShiftUndo();
+    }
+
+    private static void ShiftUndo()
+    {
+        var mapper = new LaunchkeyControlMapper();
+        AssertUndo(mapper, MusicControlKind.Undo, "Undo did not map without Shift.");
+        Check.That(!mapper.TryMap(Cc(77, 0), out _), "Undo release repeated the command.");
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 0x6C, 127), out _),
+            "Shift press produced an application command."
+        );
+        AssertUndo(mapper, MusicControlKind.Redo, "Raw DAW Shift+Undo did not map to Redo.");
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 0x6C, 0, true), out _)
+                && !mapper.TryMap(Raw(0xB1, 0x6C, 0), out _)
+                && !mapper.TryMap(Raw(0xBF, 0x6C, 0), out _),
+            "Wrong-port or wrong-channel Shift release produced a command."
+        );
+        AssertUndo(mapper, MusicControlKind.Redo, "Unrelated Shift release cleared DAW Shift.");
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 0x6C, 0), out _),
+            "Shift release produced an application command."
+        );
+        AssertUndo(mapper, MusicControlKind.Undo, "Shift stayed held after raw DAW release.");
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 0x6C, 127, true), out _)
+                && !mapper.TryMap(Raw(0xB1, 0x6C, 127), out _)
+                && !mapper.TryMap(Raw(0xBF, 0x6C, 127), out _),
+            "Wrong-port or wrong-channel Shift press produced a command."
+        );
+        AssertUndo(mapper, MusicControlKind.Undo, "Unrelated Shift press changed Undo to Redo.");
+        Check.That(
+            !mapper.TryMap(Raw(0xBF, 77, 127, true), out _)
+                && !mapper.TryMap(Raw(0xB0, 77, 127), out _),
+            "Undo accepted a wrong port or channel."
+        );
+        Check.That(
+            !mapper.TryMap(Raw(0xB0, 0x6C, 1), out _)
+                && !mapper.TryMap(Cc(77, 0), out _)
+                && !mapper.TryMap(Raw(0xB0, 0x6C, 0), out _),
+            "Shift or Undo release produced a command."
+        );
+        AssertUndo(
+            mapper,
+            MusicControlKind.Undo,
+            "Shift state stuck across a second press/release."
+        );
+    }
+
+    private static void AssertUndo(
+        LaunchkeyControlMapper mapper,
+        MusicControlKind kind,
+        string message
+    )
+    {
+        Check.That(
+            mapper.TryMap(Cc(77, 127), out MusicControlEvent? command) && command?.Kind == kind,
+            message
+        );
+    }
+
+    private static MidiInputEvent Raw(
+        byte status,
+        byte number,
+        byte value,
+        bool performance = false
+    )
+    {
+        Check.That(
+            MidiMessageParser.TryParse(
+                [status, number, value],
+                performance,
+                out MidiInputEvent? input
+            ),
+            "Valid control packet was rejected."
+        );
+        return input ?? throw new InvalidOperationException("Parser returned no control message.");
     }
 
     private static MidiInputEvent Cc(int number, int value)

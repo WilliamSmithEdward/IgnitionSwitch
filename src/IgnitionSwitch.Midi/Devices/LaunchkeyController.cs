@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using IgnitionSwitch.Midi.Contracts;
 using IgnitionSwitch.Midi.Profiles;
@@ -86,6 +85,9 @@ public sealed class LaunchkeyController : IMusicController
     } = Array.Empty<MidiEndpointInfo>();
 
     /// <inheritdoc />
+    public ControllerPadLayout? DrumPadLayout => LaunchkeyMk3Profile.Model37.DrumPadLayout;
+
+    /// <inheritdoc />
     public void Connect()
     {
         ControllerSession next;
@@ -99,7 +101,7 @@ public sealed class LaunchkeyController : IMusicController
                 return;
             }
 
-            next = new();
+            next = new(OnFeedbackFailed);
             session = next;
         }
 
@@ -135,10 +137,10 @@ public sealed class LaunchkeyController : IMusicController
 
         lock (stateLock)
         {
-            current = connected ? session : null;
+            current = connected && !disposed ? session : null;
         }
 
-        if (current is null || !current.HasDawOutput)
+        if (current is null)
         {
             return;
         }
@@ -163,18 +165,28 @@ public sealed class LaunchkeyController : IMusicController
             Array.AsReadOnly(muted)
         );
 
-        try
+        current.WriteFeedback(snapshot);
+    }
+
+    /// <inheritdoc />
+    public void UpdatePadFeedback(PadFeedback feedback)
+    {
+        ControllerSession? current;
+
+        lock (stateLock)
         {
-            current.WriteFeedback(snapshot);
+            current = connected && !disposed ? session : null;
         }
 
-        catch (Exception exception) when (IsDeviceException(exception))
-        {
-            ReleaseSession(
-                current,
-                "Launchkey feedback stopped. Check the USB cable, close other MIDI apps, then reconnect."
-            );
-        }
+        current?.UpdatePadFeedback(feedback);
+    }
+
+    private void OnFeedbackFailed(ControllerSession current)
+    {
+        ReleaseSession(
+            current,
+            "Launchkey feedback stopped. Check the USB cable, close other MIDI apps, then reconnect."
+        );
     }
 
     /// <summary>Disconnects and prevents future connection attempts.</summary>
@@ -418,11 +430,6 @@ public sealed class LaunchkeyController : IMusicController
             LaunchkeyMk3Profile.IsCandidateName(device.Name),
             LaunchkeyMk3Profile.IsDawName(device.Name)
         );
-    }
-
-    private static bool IsDeviceException(Exception exception)
-    {
-        return exception is COMException or InvalidOperationException or ObjectDisposedException;
     }
 
     private void SetStatus(ControllerSession current, string message)

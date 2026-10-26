@@ -6,6 +6,10 @@ namespace IgnitionSwitch.Midi.Profiles;
 /// <summary>Maps verified MK3 surface input to IgnitionSwitch's four-track controls, respecting the current hardware modes.</summary>
 public sealed class LaunchkeyControlMapper
 {
+    // The DAW port reports Shift on channel 1, independently of channel-16 commands.
+    private const int ShiftController = 108;
+    private bool shiftHeld;
+
     /// <summary>The current hardware pad mode. Session is 2.</summary>
     public int PadMode { get; private set; } = 2;
 
@@ -26,6 +30,16 @@ public sealed class LaunchkeyControlMapper
                 or > 127
         )
         {
+            return false;
+        }
+
+        if (
+            input.Kind == MidiInputKind.ControlChange
+            && input.Channel == 0
+            && input.Number == ShiftController
+        )
+        {
+            shiftHeld = input.Value > 0;
             return false;
         }
 
@@ -100,6 +114,9 @@ public sealed class LaunchkeyControlMapper
             LaunchkeyMk3Protocol.Stop => new(MusicControlKind.Stop),
             LaunchkeyMk3Protocol.Record => new(MusicControlKind.ToggleRecording),
             LaunchkeyMk3Protocol.Click => new(MusicControlKind.ToggleMetronome),
+            LaunchkeyMk3Protocol.Undo => new(
+                shiftHeld ? MusicControlKind.Redo : MusicControlKind.Undo
+            ),
             LaunchkeyMk3Protocol.TrackLeft => new(MusicControlKind.MoveTrack, -1),
             LaunchkeyMk3Protocol.TrackRight => new(MusicControlKind.MoveTrack, 1),
             _ => null

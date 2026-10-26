@@ -1,3 +1,5 @@
+using IgnitionSwitch.Midi.Contracts;
+
 namespace IgnitionSwitch.Midi.Profiles;
 
 /// <summary>Hardware capabilities for the first supported model. Other models need their own verified profile.</summary>
@@ -19,6 +21,12 @@ public sealed class LaunchkeyMk3Profile
 
     /// <summary>Number of velocity-sensitive pads.</summary>
     public int PadCount { get; } = 16;
+
+    /// <summary>The MK3's physical two-by-eight Drum note order, with the top row first.</summary>
+    public ControllerPadLayout DrumPadLayout { get; } = new(
+        8,
+        [40, 41, 42, 43, 48, 49, 50, 51, 36, 37, 38, 39, 44, 45, 46, 47]
+    );
 
     /// <summary>Number of hardware pots.</summary>
     public int KnobCount { get; } = 8;

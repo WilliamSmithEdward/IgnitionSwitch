@@ -24,12 +24,18 @@ public interface IMusicController : IDisposable
     /// <summary>Snapshot of all MIDI endpoints observed during the latest discovery.</summary>
     IReadOnlyList<MidiEndpointInfo> Endpoints { get; }
 
+    /// <summary>Physical Drum-pad note order, or null when the controller has no known layout.</summary>
+    ControllerPadLayout? DrumPadLayout { get; }
+
     /// <summary>Starts discovery in the background. Progress is reported through StatusChanged.</summary>
     void Connect();
 
     /// <summary>Closes the active connection and relinquishes hardware feedback.</summary>
     void Disconnect();
 
-    /// <summary>Synchronizes track selection, mute flags, and transport feedback.</summary>
+    /// <summary>Queues track selection, mute flags, and transport feedback without hardware output on the calling thread.</summary>
     void UpdateFeedback(ControllerFeedback feedback);
+
+    /// <summary>Queues pad activity without performing hardware output on the calling thread.</summary>
+    void UpdatePadFeedback(PadFeedback feedback);
 }
