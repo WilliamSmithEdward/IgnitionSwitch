@@ -21,6 +21,6 @@ public sealed class MidiInputEvent(
     /// <summary>Velocity, controller value, pressure, program, or unsigned 14-bit pitch bend.</summary>
     public int Value { get; } = value;
 
-    /// <summary>True for the performance endpoint; false for the separate control-surface endpoint.</summary>
+    /// <summary>True for the musical performance route. The parser initializes this from the endpoint; verified adapters may also route playable control-surface pads here.</summary>
     public bool SourcePerformance { get; } = sourcePerformance;
 }

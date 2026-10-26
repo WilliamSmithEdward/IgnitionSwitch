@@ -13,10 +13,10 @@ public static class LaunchkeyMk3Protocol
     public const int ControlChannel = 15;
 
     /// <summary>Previous track button CC.</summary>
-    public const int TrackLeft = 102;
+    public const int TrackLeft = 103;
 
     /// <summary>Next track button CC.</summary>
-    public const int TrackRight = 103;
+    public const int TrackRight = 102;
 
     /// <summary>Capture MIDI button CC.</summary>
     public const int CaptureMidi = 74;
@@ -158,6 +158,21 @@ public static class LaunchkeyMk3Protocol
         [
             pulse ? (byte)0x92 : (byte)0x90,
             (byte)(pad < 8 ? 96 + pad : 112 + pad - 8),
+            (byte)color
+        ];
+    }
+
+    /// <summary>Colors a Drum-layout MIDI note from 36–51 using the MK3 palette on its DAW output.</summary>
+    public static byte[] SetDrumPad(int note, int color, bool pulse = false)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(note, 36);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(note, 51);
+        ArgumentOutOfRangeException.ThrowIfNegative(color);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(color, 127);
+        return
+        [
+            pulse ? (byte)0x9B : (byte)0x99,
+            (byte)note,
             (byte)color
         ];
     }

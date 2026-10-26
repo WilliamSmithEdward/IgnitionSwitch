@@ -11,6 +11,8 @@ internal static class StudioSessionTests
 {
     public static void Ownership()
     {
+        VerifyTrackNavigation();
+        VerifyControlPortDrums();
         FakeMusicController controller = new();
         using StudioSession session = new(
             controller,
@@ -374,6 +376,106 @@ internal static class StudioSessionTests
             "Shutdown must dispose both injected adapters."
         );
         Check.Throws<ObjectDisposedException>(session.Engine.Play);
+    }
+
+    private static void VerifyControlPortDrums()
+    {
+        FakeMusicController controller = new();
+        using StudioSession session = new(
+            controller,
+            new WorkstationEngine(),
+            new FakeAudioPlayback()
+        );
+        using WorkstationEngine expected = new();
+        var router = new LaunchkeyPerformanceRouter();
+        session.SelectTrack(2);
+        session.ToggleRecording();
+        expected.ToggleRecording();
+        Check.That(
+            MidiMessageParser.TryParse([0x99, 37, 126], false, out MidiInputEvent? raw),
+            "The captured Drum-pad packet must parse."
+        );
+        Check.That(
+            router.TryRoute(raw!, 1, out MidiInputEvent? note),
+            "The Drum-pad packet must enter the performance route."
+        );
+        controller.EmitInput(note!);
+        expected.NoteOn(3, 37, 126);
+        float[] rendered = Check.Render(session.Engine, 0.03);
+        Check.That(
+            rendered.SequenceEqual(Check.Render(expected, 0.03)) && Check.Energy(rendered) > 1,
+            "A control-port pad must produce exactly one drum onset rather than playing the selected melodic instrument."
+        );
+        Check.That(
+            session.Engine.Tracks[3].NoteCount == 1 && session.Engine.Tracks[2].NoteCount == 0,
+            "A Drum-mode pad must record on the drum track independently of selection."
+        );
+        Check.That(
+            MidiMessageParser.TryParse([0x99, 37, 0], false, out raw),
+            "The captured velocity-zero release must parse."
+        );
+        Check.That(
+            router.TryRoute(raw!, 2, out note),
+            "The held pad release must survive returning to Session mode."
+        );
+        controller.EmitInput(note!);
+        session.Engine.Pause();
+        _ = Check.Render(session.Engine, 1.6);
+        Check.That(
+            Check.Energy(Check.Render(session.Engine, 0.02)) == 0,
+            "The drum hit must decay without a stranded note."
+        );
+    }
+
+    private static void VerifyTrackNavigation()
+    {
+        FakeMusicController controller = new();
+        using StudioSession session = new(
+            controller,
+            new WorkstationEngine(),
+            new FakeAudioPlayback()
+        );
+        var mapper = new LaunchkeyControlMapper();
+
+        void Send(byte cc, byte value = 127)
+        {
+            Check.That(
+                MidiMessageParser.TryParse([0xBF, cc, value], false, out MidiInputEvent? input),
+                "The track-arrow packet must parse."
+            );
+
+            if (mapper.TryMap(input!, out MusicControlEvent? command))
+            {
+                controller.EmitControl(command!);
+            }
+        }
+
+        foreach (int expected in new[] { 1, 2, 3, 3 })
+        {
+            Send(102);
+            Check.That(
+                session.Engine.SelectedTrack == expected,
+                "The right arrow must select the next track and stop at the last track."
+            );
+        }
+
+        foreach (int expected in new[] { 2, 1, 0, 0 })
+        {
+            Send(103);
+            Check.That(
+                session.Engine.SelectedTrack == expected,
+                "The left arrow must select the previous track and stop at the first track."
+            );
+        }
+
+        session.SelectTrack(2);
+        Send(102, 0);
+        Send(103, 0);
+        Check.That(
+            session.Engine.SelectedTrack == 2,
+            "Arrow releases must leave selection unchanged."
+        );
+        Check.That(!session.HasChanges, "Track navigation must not dirty recorded content.");
     }
 
     private static MidiInputEvent Note(MidiInputKind kind, int note, int value = 0, int channel = 0)

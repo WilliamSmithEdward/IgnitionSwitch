@@ -27,6 +27,8 @@ flowchart LR
 
 `Midi/Contracts` defines ordinary performance events, normalized music commands, identity, and feedback. Device-specific identities, port names, channel numbers, mode reports, and packet bytes belong in `Midi/Profiles`, `Midi/Protocol`, and `Midi/Devices`. `StudioSession` consumes commands such as track selection and transport changes. `ControllerFactory` is the application's current choice of adapter; session construction accepts another `IMusicController` without changing the engine.
 
+`LaunchkeyPerformanceRouter` also normalizes verified Drum-layout notes arriving on the control pair into the performance route. It retains pad releases across layout changes, while Session pads remain commands. Ordinary keyboard input bypasses control-output locking. Changing pad layouts invalidates feedback so Drum lighting or Session track colors are repainted immediately.
+
 ## Playing and recording
 
 `WorkstationEngine.Render` fills interleaved stereo floating-point samples at 48 kHz. Musical time advances from rendered audio frames. UI refresh timers display that state; they do not drive the sequencer. Scheduled loop events are ordered when recorded content changes. Live playing works while the transport is stopped or paused.

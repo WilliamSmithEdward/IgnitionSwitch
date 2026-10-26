@@ -30,7 +30,9 @@ The following observations come from development smoke tests on 2026-10-26. The 
 | Responsive workspace | The launched layout displayed all four bars and all 16 pads without horizontal scrolling at approximately 1,348 × 834 and 1,000 × 700 logical window sizes. Both pane handles were dragged successfully; native window width and height were resized separately. Shortcut labels use aligned grid columns in the compact window. |
 | Lower buffering request | A read-only query of the development playback endpoint reported a 10 ms shared default period. Shared/event playback now requests that period, with a 30 ms compatibility fallback. This is a requested duration, not measured key-to-sound latency; render work and recording capacity are covered by the [engine report](../in_memory_engine/music_api_coverage.md#responsiveness-and-measured-compute-cost). |
 | Gain display feedback | All five gain controls share 100 ms compositor easing while their native values and audio targets apply immediately. Running-app automation checked master zero/full endpoints, track target updates, direct pointer takeover and resizing with aligned fill/thumb positions. Physical rapid-pot sweeps and animation cadence remain separate checks. |
-| Keys/pads/pots played by a human | Not yet recorded as a completed physical test. |
+| Physical track arrows | William reported left/right reversed with the original mapping. The device profile now maps left to CC103 and right to CC102; this correction follows the physical report rather than the conflicting labels in the reference diagram. Both directions, releases and selection limits are covered by regression checks. |
+| Physical Drum-mode input | A read-only capture while William used Shift+Drum observed `BF 03 01` followed by `99 25 7E` and `99 25 00` on the second/control MIDI input: mode 1, note 37, channel 10, velocity-zero release. The adapter now routes those playable pads to drums. No output or audio ports were opened by the capture tool. |
+| Broader physical playing coverage | William's Drum-pad input is now captured as described above. A complete keys, pads, pots, wheels and pedal pass, plus human listening, remains incomplete. |
 | Actual pad colors/LCD rendering | Feedback packets are implemented and tested against documented bytes; a visual hardware pass is still required. |
 | Audio latency and device timing | No measured hardware latency or timing benchmark yet. |
 | Launchkey USB unplug/reconnect and MIDI-port contention | Teardown and removal handling are implemented; a physical controller unplug/replug and another-app MIDI contention test remains required. The successful audio-output recovery above does not establish either result. |
@@ -66,14 +68,14 @@ Statuses below describe code currently present. The identity/connection and appl
 | Top session pads 1–4 | Select tracks 1–4. | More tracks/scenes are not implemented. |
 | Bottom session pads 1–4 | Toggle mute for tracks 1–4. | Stop/Solo/Mute mode cycling and per-clip launch behavior. |
 | Remaining session pads | Unassigned and unlit. | Additional track/clip functions. |
-| Drum pad mode | Performance notes on the default drum channel route to the drum track. | Bank scrolling, drum-pad selection, per-drum colors and all-pad sound review. |
+| Drum pad mode | Notes 36–51 on the default drum channel route to the drum track from the performance input or verified Drum-mode control input. Returning to Session still releases held pads. Entering Drum mode lights all 16 pads blue; muted drums use red. | Physical confirmation after the routing/lighting correction; bank scrolling, strike animation and all-pad sound review. |
 | Pots 1–4 | Track gains: keys, bass, pad, drums. Audio targets apply directly; the on-screen gain controls use visual easing and coalesce feedback on the next UI tick. | Pickup and value synchronization; physical fast-turn review. |
 | Pot 5 | Master gain, with the same visual feedback behavior as track gains. | Physical response check. |
 | Pot 6 | Project tempo, 60–180 BPM. | Hardware arpeggiator clock synchronization. |
 | Pots 7–8 | Deliberately unassigned. | No effect parameters are advertised. |
 | Device/Volume pot modes | The six mappings above are enabled. Device mode is selected on connection. | A richer device parameter page may replace this initial mapping later. |
 | Pan/Send pot modes | Ignored by the application mapper. | Pan/send processing and matching feedback. |
-| Track left/right | Move selected track one step, clamped to the four-track range. | Banking if track capacity expands. |
+| Track left/right | Left is CC103 and selects the previous track; right is CC102 and selects the next track. Selection clamps to the four-track range, and releases are ignored. | Banking if track capacity expands; physical confirmation after the mapping correction. |
 | Play | Start, pause, or resume project playback; pausing preserves the transport position. | Verify the physical button and its interaction with held notes/recording. |
 | Stop | Stop playback/recording, release held notes, and rewind the loop transport. | Verify with sustained notes and active recording. |
 | Record | Toggle loop recording when audio is running. | Physical overdub review. |
@@ -106,18 +108,21 @@ Human MIDI channels are **1–16**. The C# contracts use **0–15**. This differ
 | Input | Human channel / C# channel | Meaning in this application |
 | --- | --- | --- |
 | Performance note-on/off | Configurable / parsed as 0–15 | Default channel 10 / 9 selects drums; other performance notes play the selected track. |
+| Drum-mode control-input notes 36–51 | 10 / 9 | While pad mode is 1, the adapter normalizes these as performance for the drum track; owned releases remain valid after a mode change. |
 | Sustain | Performance channel, CC64 | Sustain on at 64–127, off at 0–63. |
 | Pitch bend | Performance channel | 0 minimum, 8192 center, 16383 maximum. |
 | Pot CC21–24 | 16 / 15 | Track index `CC - 21`, gain `value / 127`. |
 | Pot CC25 | 16 / 15 | Master gain `value / 127`. |
 | Pot CC26 | 16 / 15 | Tempo `60 + round(value × 120 / 127)` BPM. |
-| Track CC102 / CC103 | 16 / 15 | Selection offset −1 / +1. |
+| Track left CC103 / right CC102 | 16 / 15 | Selection offset −1 / +1 on press; no action on release. |
 | Play/Stop/Record CC115/116/117 | 16 / 15 | Start/pause/resume toggle / stop and rewind / recording toggle on press. |
 | Click CC76 | 16 / 15 | Metronome toggle on press. |
 | Session notes 96–99 | 1 / 0, control port | Select track index `note - 96`. |
 | Session notes 112–115 | 1 / 0, control port | Toggle mute at index `note - 112`. |
 
 The application adapter ignores button releases and wrong-channel messages. Pot values of zero remain valid gain/tempo commands. Unsupported pad/pot modes produce no invented controls. A channel configured differently on the hardware is not silently inferred: changing the drum channel from its default currently requires a future configurable performance-routing profile.
+
+The observed Drum input above resolves an inconsistency in Programmer's Reference V1: its incoming Drum example prints `9A` despite describing human channel 10. William's unit sent `99` on the control input. Drum LED steady output uses `99 <note> <palette>` on that control output (`9A` flashes, `9B` pulses); blue is palette 45, red is 5, and zero turns a pad off. For example, bottom-left blue is `99 24 2D`. Input normalization remains limited to the verified layout, channel and note range.
 
 `MidiMessageParser` also accepts program change, polyphonic/channel pressure, timing clock, Start, Continue and Stop. Parsing is distinct from musical support: those extra events are not currently connected to engine parameters or external-clock transport. SysEx goes through the identity path instead of the ordinary note/CC parser. Messages above 64 bytes are ignored by the receive boundary because no implemented incoming packet requires more.
 
@@ -297,7 +302,7 @@ Easy Start can expose a Novation onboarding USB drive. That drive is not a MIDI 
 | Bounded input decoding | `src/IgnitionSwitch.Midi/Protocol/MidiMessageParser.cs` |
 | Windows port lifecycle and feedback | `src/IgnitionSwitch.Midi/Devices/LaunchkeyController.cs`, `ControllerSession.cs` |
 | Generic command execution and note routing | `src/IgnitionSwitch.App/Services/StudioSession.cs` |
-| Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: seven groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, and mode-aware normalized commands. |
+| Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: eight groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, mode-aware commands and captured Drum-pad routing across mode changes. |
 | Application input checks | `tests/IgnitionSwitch.App.Tests`: 11 groups in the confirmed run, retaining shared-audio buffer, transport, save-revision, feedback and shutdown checks alongside chord-burst acceptance, overlapping-channel ownership, modal audition and atomic project replacement. No timing thresholds or physical-device I/O are used by these checks. |
 
 Run `dotnet run --project tests/IgnitionSwitch.Midi.Tests --no-restore` after the project has been restored. These checks do not open MIDI ports. The initial library/tests passed strict .NET builds with zero diagnostics; rerun verification after relevant changes.

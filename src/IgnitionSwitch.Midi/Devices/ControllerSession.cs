@@ -25,6 +25,7 @@ internal sealed class ControllerSession : IDisposable
     private bool enteredDawMode;
     private bool disposed;
     private readonly LaunchkeyControlMapper mapper = new();
+    private readonly LaunchkeyPerformanceRouter performanceRouter = new();
 
     public CancellationToken CancellationToken { get; }
 
@@ -121,18 +122,21 @@ internal sealed class ControllerSession : IDisposable
         }
     }
 
-    public bool TryMapControl(MidiInputEvent input, out MusicControlEvent? control)
+    public bool TryMapControl(
+        MidiInputEvent input,
+        out MusicControlEvent? control,
+        out MidiInputEvent routed
+    )
     {
         lock (portLock)
         {
             int oldPadMode = mapper.PadMode;
             bool mapped = mapper.TryMap(input, out control);
+            routed = performanceRouter.TryRoute(input, mapper.PadMode, out MidiInputEvent? musical)
+                ? musical!
+                : input;
 
-            if (
-                oldPadMode != mapper.PadMode
-                && mapper.PadMode == 2
-                && previousFeedback is { } cached
-            )
+            if (oldPadMode != mapper.PadMode && previousFeedback is { } cached)
             {
                 previousFeedback = null;
                 WriteFeedback(cached);
@@ -179,6 +183,16 @@ internal sealed class ControllerSession : IDisposable
                     }
 
                     SendDaw(LaunchkeyMk3Protocol.SetSessionPad(pad, color));
+                }
+            }
+
+            else if (mapper.PadMode == 1)
+            {
+                int color = feedback.TrackNames.Count <= 3 ? 0 : feedback.TrackMuted[3] ? 5 : 45;
+
+                for (int note = 36; note <= 51; note++)
+                {
+                    SendDaw(LaunchkeyMk3Protocol.SetDrumPad(note, color));
                 }
             }
 

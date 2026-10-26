@@ -7,7 +7,7 @@ using IgnitionSwitch.App;
         AudioBufferTests.SharedPeriod
     ),
     (
-        "MIDI note ownership survives track selection and separates drums",
+        "Track arrows navigate correctly, note ownership survives selection, and Drum-mode pads play drums",
         StudioSessionTests.Ownership
     ),
     (

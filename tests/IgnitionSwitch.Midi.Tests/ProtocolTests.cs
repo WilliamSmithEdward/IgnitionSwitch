@@ -157,6 +157,13 @@ internal static class ProtocolTests
         Check.Bytes([0x90, 96, 5], LaunchkeyMk3Protocol.SetSessionPad(0, 5));
         Check.Bytes([0x90, 112, 5], LaunchkeyMk3Protocol.SetSessionPad(8, 5));
         Check.Bytes([0x92, 119, 45], LaunchkeyMk3Protocol.SetSessionPad(15, 45, true));
+        Check.Bytes([0x99, 36, 45], LaunchkeyMk3Protocol.SetDrumPad(36, 45));
+        Check.Bytes([0x99, 51, 0], LaunchkeyMk3Protocol.SetDrumPad(51, 0));
+        Check.Bytes([0x9B, 37, 5], LaunchkeyMk3Protocol.SetDrumPad(37, 5, true));
+        Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(35, 45));
+        Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(52, 45));
+        Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(36, -1));
+        Check.Throws<ArgumentOutOfRangeException>(() => LaunchkeyMk3Protocol.SetDrumPad(36, 128));
         byte[] sanitized = LaunchkeyMk3Protocol.SetDisplayRow(
             1,
             "é\n\u00F7\u00F7" + new string('x', 50)

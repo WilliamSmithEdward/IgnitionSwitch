@@ -377,12 +377,17 @@ public sealed class LaunchkeyController : IMusicController
                 return;
             }
 
-            if (!performance && current.TryMapControl(input!, out MusicControlEvent? control))
+            MidiInputEvent routed = input!;
+
+            if (
+                !performance
+                && current.TryMapControl(input!, out MusicControlEvent? control, out routed)
+            )
             {
                 RaiseEvent(ControlReceived, control!, "Music control");
             }
 
-            RaiseEvent(InputReceived, input!, "MIDI input");
+            RaiseEvent(InputReceived, routed, "MIDI input");
         }
 
         catch (Exception exception)

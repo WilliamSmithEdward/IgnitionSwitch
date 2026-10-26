@@ -1,6 +1,6 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, smooth mixer presentation update. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, track-arrow and Drum-mode hardware corrections. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
@@ -21,7 +21,7 @@ Counts are taken from the generated Release XML documentation at `src/IgnitionSw
 
 `WorkstationEngine` therefore declares **34 non-type members**: 20 method overloads, 11 properties, and 3 constants. The full documented Core API has 65 non-type entries plus 7 type entries. `NoteRevision` tracks recorded note-content changes independently of mixer and transport state.
 
-The mixer animation change is confined to the App presentation adapter. It does not add or alter Core API members, gain mapping, audio processing, or saved project data.
+The hardware mapping changes are confined to MIDI adapters and their integration checks. Core API membership remains unchanged at 72 XML entries; the corrections do not change synthesis, gain mapping, audio processing, or saved project data.
 
 ## Implemented behavior and evidence
 
@@ -45,16 +45,17 @@ The mixer animation change is confined to the App presentation adapter. It does 
 | Input and lifecycle validation | Implemented; invalid track/note/gain/buffer controls rejected, disposal prevents further engine work | `ValidationTests.Controls` | Extended concurrency and long-session stress |
 | Revision-aware saves and dialogs | Implemented in App adapter; captured revisions preserve newer unsaved edits, note completion advances content revision, modal operations finalize/block project mutations while preserving live performance, project replacement resets owners atomically | `StudioSessionTests.Revisions`, `.ModalIsolation`; `InputReliabilityTests.ProjectReplacement` | Full interactive picker/confirmation pass |
 | Controller feedback and shutdown | Implemented in App adapter; mute/name/connection-aware feedback, callback guards and adapter disposal | `StudioSessionTests.Feedback`, `.Shutdown` | Physical unplug/contending-app tests and visible LED/LCD verification |
+| Track arrows and Drum layout | Implemented in MIDI adapter; observed left/right mapping, mode-aware control-port Drum normalization, retained releases, blue/red Drum LEDs and Session-mode repaint | `ControlMappingTests.Commands`, `PerformanceRoutingTests.Routing`, `ProtocolTests.Feedback`; `StudioSessionTests.Ownership` checks raw-packet navigation boundaries and rendered drum routing. Local physical capture confirmed mode 1 and `99` Drum input on the control pair | Human confirmation of corrected directions and LED appearance after rebuilding |
 
 ## Test inventory and physical evidence
 
-The executable runners currently define **12 Core groups**, **7 MIDI groups**, and **11 App groups**: **30 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
+The executable runners currently define **12 Core groups**, **8 MIDI groups**, and **11 App groups**: **31 groups** in total. Each group contains multiple assertions. Run the complete build, checks, formatting, and informational analyzer validation with:
 
 ```powershell
 .\scripts\verify.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-The combined change passes **12/12 Core**, **7/7 MIDI**, and **11/11 App groups** in Release/x64. Automated checks do not establish physical audio quality or complete hardware coverage.
+The combined change passes **12/12 Core**, **8/8 MIDI**, and **11/11 App groups** in Release/x64. Automated checks do not establish physical audio quality or complete hardware coverage.
 
 The local formatter runtime is Python 3.12. GitHub CI pins Python **3.13.17**, whose Windows x64 artifact is listed in the Actions runtime manifest. This tooling pin does not change the API inventory or supported music behavior.
 
@@ -62,7 +63,7 @@ The Core runner checks actual rendered buffers, musical state, and files. The MI
 
 The launched app has observed the connected **Launchkey 37 MK3**, firmware **0.2.1.7**, through its identity handshake. A UI-driven session recorded one keyboard note and one drum-pad hit into the four-bar loop. After restoring a Windows default physical output, the app recovered playback; its process-specific WASAPI session meter showed active, nonzero output, reaching approximately **0.07** over a **12-second** observation window. This is output-path evidence, not a latency measurement or a human listening assessment.
 
-Human-operated hardware keys/buttons/pedal, actual LED/LCD appearance, subjective audible quality, and latency have not yet been recorded as completed physical checks. A working Windows default output is required for that pass. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
+A limited physical capture has now confirmed William's Shift+Drum mode change and pad notes on the control pair. A complete hardware controls/pedal pass, actual LED/LCD appearance, subjective audible quality, and latency remain unverified. A working Windows default output is required for the listening pass. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
 
 ## Responsiveness and measured compute cost
 

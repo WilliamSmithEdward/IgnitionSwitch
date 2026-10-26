@@ -21,9 +21,18 @@ internal static class ControlMappingTests
             "Performance port produced a surface command."
         );
         Check.That(
-            mapper.TryMap(Cc(102, 127), out command)
+            mapper.TryMap(Cc(103, 127), out command)
                 && command is { Kind: MusicControlKind.MoveTrack, Index: -1 },
             "Track-left direction was incorrect."
+        );
+        Check.That(
+            mapper.TryMap(Cc(102, 127), out command)
+                && command is { Kind: MusicControlKind.MoveTrack, Index: 1 },
+            "Track-right direction was incorrect."
+        );
+        Check.That(
+            !mapper.TryMap(Cc(102, 0), out _) && !mapper.TryMap(Cc(103, 0), out _),
+            "Releasing a track arrow must not move selection again."
         );
         Check.That(
             mapper.TryMap(new(MidiInputKind.NoteOn, 0, 99, 127, false), out command)

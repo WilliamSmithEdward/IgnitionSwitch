@@ -21,6 +21,10 @@
     (
         "Hardware commands normalize values and reject wrong channels and unsupported modes",
         ControlMappingTests.Commands
+    ),
+    (
+        "Captured Drum-mode input routes as performance and retains releases across mode changes",
+        PerformanceRoutingTests.Routing
     )
 ];
 
