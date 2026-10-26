@@ -50,6 +50,8 @@ The executable runners currently define **9 Core groups**, **7 MIDI groups**, an
 
 On **2026-10-26**, the complete verification script passed locally in Release/x64: **22/22 groups**, a build with **zero warnings and errors**, the pinned prettyCSharp check, and style/analyzer checks including informational diagnostics. This does not establish physical audio quality or complete hardware coverage.
 
+The local formatter runtime is Python 3.12. GitHub CI pins Python **3.13.17**, whose Windows x64 artifact is listed in the Actions runtime manifest. This tooling pin does not change the API inventory or supported music behavior.
+
 The Core runner checks actual rendered buffers, musical state, and files. The MIDI runner uses pure protocol fixtures and malformed-input cases without opening ports. The App runner compiles the production coordinator with fake boundary adapters. An individual suite passing does not replace the full verification script after a change.
 
 The launched app has observed the connected **Launchkey 37 MK3**, firmware **0.2.1.7**, through its identity handshake. Human-operated keys/buttons/pedal, actual LED/LCD appearance, audible playback through a selected physical output, and latency have not yet been recorded as completed physical checks. A working Windows default output is required for that pass. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
