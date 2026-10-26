@@ -1,6 +1,6 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, track-arrow and Drum-mode hardware corrections. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, limited physical confirmation of track arrows and Drum mode in build `3fe448d`. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
@@ -45,7 +45,7 @@ The hardware mapping changes are confined to MIDI adapters and their integration
 | Input and lifecycle validation | Implemented; invalid track/note/gain/buffer controls rejected, disposal prevents further engine work | `ValidationTests.Controls` | Extended concurrency and long-session stress |
 | Revision-aware saves and dialogs | Implemented in App adapter; captured revisions preserve newer unsaved edits, note completion advances content revision, modal operations finalize/block project mutations while preserving live performance, project replacement resets owners atomically | `StudioSessionTests.Revisions`, `.ModalIsolation`; `InputReliabilityTests.ProjectReplacement` | Full interactive picker/confirmation pass |
 | Controller feedback and shutdown | Implemented in App adapter; mute/name/connection-aware feedback, callback guards and adapter disposal | `StudioSessionTests.Feedback`, `.Shutdown` | Physical unplug/contending-app tests and visible LED/LCD verification |
-| Track arrows and Drum layout | Implemented in MIDI adapter; observed left/right mapping, mode-aware control-port Drum normalization, retained releases, blue/red Drum LEDs and Session-mode repaint | `ControlMappingTests.Commands`, `PerformanceRoutingTests.Routing`, `ProtocolTests.Feedback`; `StudioSessionTests.Ownership` checks raw-packet navigation boundaries and rendered drum routing. Local physical capture confirmed mode 1 and `99` Drum input on the control pair | Human confirmation of corrected directions and LED appearance after rebuilding |
+| Track arrows and Drum layout | Implemented in MIDI adapter; observed left/right mapping, mode-aware control-port Drum normalization, retained releases, blue/red Drum LEDs and Session-mode repaint | `ControlMappingTests.Commands`, `PerformanceRoutingTests.Routing`, `ProtocolTests.Feedback`; `StudioSessionTests.Ownership` checks raw-packet navigation boundaries and rendered drum routing. Local physical capture confirmed mode 1 and `99` Drum input on the control pair. On 2026-10-26, William confirmed build `3fe448d` displays blue Drum pads that make drum sounds, and both track-arrow directions are correct | Individual verification of all pads, muted red LEDs, Session-mode repaint, LCD behavior and broader playing quality |
 
 ## Test inventory and physical evidence
 
@@ -63,7 +63,7 @@ The Core runner checks actual rendered buffers, musical state, and files. The MI
 
 The launched app has observed the connected **Launchkey 37 MK3**, firmware **0.2.1.7**, through its identity handshake. A UI-driven session recorded one keyboard note and one drum-pad hit into the four-bar loop. After restoring a Windows default physical output, the app recovered playback; its process-specific WASAPI session meter showed active, nonzero output, reaching approximately **0.07** over a **12-second** observation window. This is output-path evidence, not a latency measurement or a human listening assessment.
 
-A limited physical capture has now confirmed William's Shift+Drum mode change and pad notes on the control pair. A complete hardware controls/pedal pass, actual LED/LCD appearance, subjective audible quality, and latency remain unverified. A working Windows default output is required for the listening pass. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
+A limited physical capture confirmed William's Shift+Drum mode change and pad notes on the control pair. On **2026-10-26**, William tested updated build `3fe448d` and confirmed that the pads light blue and make drum sounds, and that both track-arrow directions are correct. This establishes basic physical Drum lighting/sound and corrected navigation; it does not establish individual coverage of all pads, muted red LEDs, LCD behavior, broader musical quality or latency. A full hardware controls and pedal pass is still pending. Detailed mappings and hardware evidence live in [the maintained device reference](../devices/novation_launchkey_mk3_37.md).
 
 ## Responsiveness and measured compute cost
 
