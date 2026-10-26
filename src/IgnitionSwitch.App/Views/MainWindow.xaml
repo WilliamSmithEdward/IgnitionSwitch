@@ -293,6 +293,9 @@
                                                 <MenuFlyoutItem x:Name="QuantizeTrackItem"
                                                     Text="Quantise selected track"
                                                     AutomationProperties.Name="Quantise selected track to the 1/16 note grid" />
+                                                <MenuFlyoutItem x:Name="CaptureRecentItem"
+                                                    Text="Capture recent playing"
+                                                    AutomationProperties.Name="Capture recent playing into the loop" />
                                                 <MenuFlyoutSeparator />
                                                 <ToggleMenuFlyoutItem x:Name="RecordingGridItem"
                                                     Text="Record on 1/16 grid" IsChecked="True"

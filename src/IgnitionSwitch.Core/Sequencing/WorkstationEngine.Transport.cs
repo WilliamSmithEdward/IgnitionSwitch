@@ -73,6 +73,11 @@ public sealed partial class WorkstationEngine
 
     private void StartPlayback()
     {
+        if (!_isPlaying)
+        {
+            _performance.MarkDiscontinuity();
+        }
+
         if (_passCompleted)
         {
             ResetPlaybackPosition();
@@ -88,6 +93,7 @@ public sealed partial class WorkstationEngine
 
     private void ResetPlaybackPosition()
     {
+        _performance.MarkDiscontinuity();
         _absoluteBeat = 0;
         _scheduleCursor = 0;
         _pendingLoopStarts.Clear();
@@ -99,6 +105,7 @@ public sealed partial class WorkstationEngine
 
     private void EndSequencedPlayback()
     {
+        _performance.MarkDiscontinuity();
         _ = EndRecordingCore();
         _history.Commit();
         _isPlaying = false;

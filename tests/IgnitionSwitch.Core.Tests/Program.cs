@@ -45,7 +45,27 @@
         "Malformed, unsupported, oversized, and nonfinite projects are rejected",
         ValidationTests.Projects
     ),
-    ("Project roundtrip is independent, atomic, and cancellable", PersistenceTests.Roundtrip)
+    ("Project roundtrip is independent, atomic, and cancellable", PersistenceTests.Roundtrip),
+    (
+        "Capture free phrases preserve bar boundaries and frozen idle windows",
+        CaptureAlignmentTests.FreePhraseAndBoundary
+    ),
+    (
+        "Capture project alignment, transport epochs, and held adoption remain consistent",
+        CaptureAlignmentTests.ProjectPhaseAndEpoch
+    ),
+    (
+        "Capture merges deterministic candidates with one reversible history batch",
+        CaptureTests.MergeAndHistory
+    ),
+    (
+        "Capture capacity, truncation, and lifecycle changes are atomic and bounded",
+        CaptureTests.BoundsAndLifecycle
+    ),
+    (
+        "Capture clocks integrate rendered tempo and preserve callback partitions",
+        CaptureTests.ClocksAndPartitions
+    )
 ];
 
 int failures = 0;

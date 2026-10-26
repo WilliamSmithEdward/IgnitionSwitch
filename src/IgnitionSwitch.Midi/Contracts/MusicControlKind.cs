@@ -30,5 +30,7 @@ public enum MusicControlKind
     /// <summary>Aligns recorded notes on the selected track to the recording grid.</summary>
     QuantizeSelectedTrack,
     /// <summary>Toggles whether playback repeats at the loop boundary.</summary>
-    ToggleLoop
+    ToggleLoop,
+    /// <summary>Captures recently performed notes into the project.</summary>
+    CaptureRecentPerformance
 }

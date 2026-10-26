@@ -250,6 +250,7 @@ public sealed partial class WorkstationEngine : IDisposable
         {
             ThrowIfDisposed();
             EndSequencedPlayback();
+            _performance.CloseAll();
             ResetPlaybackPosition();
             _held.Clear();
             _voices.Clear();
@@ -310,6 +311,12 @@ public sealed partial class WorkstationEngine : IDisposable
     /// <summary>Plays a MIDI note on a specific track independently of the selected track.</summary>
     public void NoteOn(int track, int note, int velocity)
     {
+        NoteOn(track, note, velocity, true);
+    }
+
+    /// <summary>Plays a live note and optionally retains its clocked performance for retrospective capture; false excludes unavailable-audio input from that history.</summary>
+    public void NoteOn(int track, int note, int velocity, bool retainForCapture)
+    {
         ValidateTrack(track);
         ArgumentOutOfRangeException.ThrowIfNegative(note);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(note, 127);
@@ -333,6 +340,16 @@ public sealed partial class WorkstationEngine : IDisposable
 
             int id = NextVoiceId();
             AddVoice(new SynthVoice(id, track, note, velocity, _tracks[track].Instrument, false));
+            _performance.NoteOn(
+                track,
+                note,
+                velocity,
+                retainForCapture,
+                _recordingQuantizationEnabled,
+                _isPlaying,
+                _absoluteBeat,
+                _tempo / (60 * SampleRate)
+            );
             HeldNote held = new(
                 id,
                 track,
@@ -442,6 +459,7 @@ public sealed partial class WorkstationEngine : IDisposable
             ThrowIfDisposed();
             FinalizeHeldRecordings();
             _history.Commit();
+            _performance.CloseAll();
             _held.Clear();
             _voices.Clear();
             _pitchRatio = 1;
@@ -617,6 +635,7 @@ public sealed partial class WorkstationEngine : IDisposable
                     float output = MathF.Tanh(mixed);
                     samples[sample] = output;
                     samples[sample + 1] = output;
+                    _performance.Advance(beatsPerSample);
 
                     if (_isPlaying)
                     {
@@ -709,6 +728,8 @@ public sealed partial class WorkstationEngine : IDisposable
             RebuildSchedule();
             _noteRevision++;
             _history.Reset();
+            _performance.Clear();
+            _captureWorkspace?.Clear();
         }
     }
 
@@ -727,6 +748,8 @@ public sealed partial class WorkstationEngine : IDisposable
             _schedule.Clear();
             _pendingLoopStarts.Clear();
             _history.Reset();
+            _performance.Clear();
+            _captureWorkspace?.Clear();
             _isPlaying = false;
             _isRecording = false;
             _disposed = true;
@@ -774,6 +797,11 @@ public sealed partial class WorkstationEngine : IDisposable
 
     private void ReleaseKey(int track, int note)
     {
+        if (_tracks[track].Instrument == InstrumentKind.Drums)
+        {
+            _performance.CloseNote(track, note);
+        }
+
         if (!_held.TryGetValue((track, note), out HeldNote? held))
         {
             return;
@@ -790,6 +818,8 @@ public sealed partial class WorkstationEngine : IDisposable
 
     private void ReleaseHeld(HeldNote held)
     {
+        _performance.CloseNote(held.Track, held.Note);
+
         foreach (SynthVoice voice in _voices)
         {
             if (voice.Id == held.Id)

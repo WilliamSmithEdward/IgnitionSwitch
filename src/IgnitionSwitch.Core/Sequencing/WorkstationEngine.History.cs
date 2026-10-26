@@ -159,13 +159,15 @@ public sealed partial class WorkstationEngine
         _scheduleCursor = first;
     }
 
-    private void ApplyHistoryNote(NoteEdit edit, bool reverse)
+    private void ApplyHistoryNote(NoteEdit edit, bool reverse, bool removeLoopVoices = true)
     {
         Track track = _tracks[edit.Track];
         LoopNote? target = reverse ? edit.Before : edit.After;
-        int index = -1;
+        int index = edit.Index < track.Notes.Count && track.Notes[edit.Index].Id == edit.Id
+            ? edit.Index
+            : -1;
 
-        for (int candidate = 0; candidate < track.Notes.Count; candidate++)
+        for (int candidate = 0; index < 0 && candidate < track.Notes.Count; candidate++)
         {
             if (track.Notes[candidate].Id == edit.Id)
             {
@@ -174,7 +176,11 @@ public sealed partial class WorkstationEngine
             }
         }
 
-        RemoveLoopVoices(edit.Id);
+        if (removeLoopVoices)
+        {
+            RemoveLoopVoices(edit.Id);
+        }
+
         _ = _pendingLoopStarts.Remove(edit.Id);
 
         if (index >= 0)

@@ -3,6 +3,14 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Capture commands preserve all-track ownership, undo, saves, modal guards, and project boundaries",
+        CaptureCommandTests.Commands
+    ),
+    (
+        "Capture retains valid history through audio outages without inventing unclocked performance",
+        CaptureCommandTests.AudioAvailabilityAndLifecycle
+    ),
+    (
         "Loop commands preserve modal, recording, live ownership, save, and terminal behavior",
         LoopCommandTests.Commands
     ),

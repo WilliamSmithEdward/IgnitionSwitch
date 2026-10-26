@@ -110,6 +110,7 @@ internal static class ControlMappingTests
         ShiftUndo();
         PrimaryButton(75, MusicControlKind.QuantizeSelectedTrack, "Quantise");
         PrimaryButton(118, MusicControlKind.ToggleLoop, "Loop");
+        PrimaryButton(74, MusicControlKind.CaptureRecentPerformance, "Capture MIDI");
     }
 
     private static void PrimaryButton(byte number, MusicControlKind kind, string name)

@@ -20,7 +20,7 @@ Active development goal, started **2026-10-26**. The first hardware target is Wi
 | Undo/Redo | Implemented: bounded note/mixer delta history, recording-part grouping, gesture coalescing, hardware and keyboard commands | Interactive gestures, save/dirty state and physical Shift+Undo verification |
 | Quantise | Implemented: selected-track onset correction with preserved durations, deterministic collisions, one undo step, optional recording grid and compact Loop options | 42 combined automated groups, build, formatting and informational analyzers pass; physical Quantise and musical review remain |
 | Loop | Implemented: repeating/single-pass transport, exact terminal position, retained live playing, hardware command, LCD context and compact menu; 45 automated groups and full informational checks pass | Physical Loop/LCD/recording review; audible terminal-position check |
-| Capture MIDI | Pending | Retrospective sample-clocked performance history and a clear undoable capture window |
+| Capture MIDI | Implemented: bounded all-track live history, phrase alignment, held/sustained gates, atomic one-step capture and explicit failure results | 52 combined automated groups and full informational checks pass; physical button and audible phrase review remain |
 | Scene and clip controls | Pending | Selectable scene content, launch semantics and Stop/Solo/Mute contextual row actions |
 | All parameter pages | Pending | Eight useful parameters per applicable page, pan/effects sends, Device Select/Lock, pickup and LCD values |
 | Native feature integration | Partially verified | Scale/chord/arp/strum and transposition coverage; optional clock synchronization through the performance output |

@@ -62,7 +62,7 @@ internal sealed partial class StudioSession : IDisposable
                 return;
             }
 
-            Engine.NoteOn(track, note, velocity);
+            Engine.NoteOn(track, note, velocity, Audio.IsRunning);
 
             if (previewOwners.Add((track, note)))
             {
@@ -569,7 +569,7 @@ internal sealed partial class StudioSession : IDisposable
                 noteOwners[key] = track;
                 activeNoteOwners[(track * 128) + input.Number]++;
                 SustainTrackIfNeeded(track);
-                Engine.NoteOn(track, input.Number, input.Value);
+                Engine.NoteOn(track, input.Number, input.Value, Audio.IsRunning);
                 ReportPerformance(track, input.Number, input.Value, true);
 
                 if (Engine.IsRecording)
@@ -627,6 +627,10 @@ internal sealed partial class StudioSession : IDisposable
     {
         switch (control.Kind)
         {
+            case MusicControlKind.CaptureRecentPerformance:
+                _ = CaptureRecentPerformanceCore();
+                break;
+
             case MusicControlKind.ToggleLoop:
                 Engine.LoopEnabled = !Engine.LoopEnabled;
                 break;

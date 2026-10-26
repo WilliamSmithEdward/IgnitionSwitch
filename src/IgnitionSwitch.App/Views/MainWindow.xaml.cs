@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window, IDisposable
     private readonly long[] padSequences = new long[128];
     private readonly bool[] padPressed = new bool[128];
     private IReadOnlyList<PadControls> padControls = [];
+    private CaptureResult? pendingCaptureResult;
     private bool updating;
     private bool closingAllowed;
     private bool dialogOpen;
@@ -63,6 +64,7 @@ public sealed partial class MainWindow : Window, IDisposable
         session.Controller.ControlReceived += OnControllerControlReceived;
         session.PerformanceChanged += OnPerformanceChanged;
         session.PerformanceReset += OnPerformanceReset;
+        session.CaptureCompleted += OnCaptureCompleted;
         workspaceLayout = new WorkspaceLayout(
             WorkspaceScroll,
             WorkspaceRoot,
@@ -128,6 +130,7 @@ public sealed partial class MainWindow : Window, IDisposable
 
         session.PerformanceChanged -= OnPerformanceChanged;
         session.PerformanceReset -= OnPerformanceReset;
+        session.CaptureCompleted -= OnCaptureCompleted;
         session.Controller.ControlReceived -= OnControllerControlReceived;
         masterMotion.Dispose();
 
@@ -296,6 +299,11 @@ public sealed partial class MainWindow : Window, IDisposable
             _ = session.QuantizeSelectedTrack();
             RefreshState();
         };
+        CaptureRecentItem.Click += (_, _) =>
+        {
+            _ = session.CaptureRecentPerformance();
+            RefreshState();
+        };
         RecordingGridItem.Click += (_, _) =>
         {
             if (!updating)
@@ -412,7 +420,14 @@ public sealed partial class MainWindow : Window, IDisposable
     private void OnPerformanceReset(object? sender, EventArgs args)
     {
         padActivity.Clear();
+        _ = Interlocked.Exchange(ref pendingCaptureResult, null);
         _ = Interlocked.Exchange(ref padResetRequested, 1);
+    }
+
+    private void OnCaptureCompleted(object? sender, CaptureResult result)
+    {
+        _ = Interlocked.Exchange(ref pendingCaptureResult, result);
+        _ = Interlocked.Exchange(ref stateRefreshRequested, 1);
     }
 
     private void RefreshPadActivity()
@@ -487,6 +502,7 @@ public sealed partial class MainWindow : Window, IDisposable
         RepeatLoopItem.IsEnabled = !session.IsInteractionBlocked;
         QuantizeTrackItem.IsEnabled = !session.IsInteractionBlocked
             && (engine.IsRecording || tracks[engine.SelectedTrack].NoteCount > 0);
+        CaptureRecentItem.IsEnabled = session.CanCaptureRecentPerformance;
         RecordingGridItem.IsChecked = session.RecordingQuantizationEnabled;
         RecordingGridItem.IsEnabled = !session.IsInteractionBlocked;
         SelectedTrackText.Text = tracks[engine.SelectedTrack].Name;
@@ -538,6 +554,12 @@ public sealed partial class MainWindow : Window, IDisposable
             showingAudioError = true;
         }
 
+        else if (Interlocked.Exchange(ref pendingCaptureResult, null) is { } captureResult)
+        {
+            StatusText.Text = CaptureStatusText(captureResult);
+            showingAudioError = false;
+        }
+
         else if (showingAudioError)
         {
             StatusText.Text = string.Empty;
@@ -548,6 +570,22 @@ public sealed partial class MainWindow : Window, IDisposable
             ? Visibility.Collapsed
             : Visibility.Visible;
         updating = false;
+    }
+
+    private static string CaptureStatusText(CaptureResult result)
+    {
+        return result.Status switch
+        {
+            CaptureStatus.Captured =>
+                $"{result.NoteCount} {(result.NoteCount == 1 ? "note" : "notes")} captured.",
+            CaptureStatus.NoChanges => "Recent playing is already in the loop.",
+            CaptureStatus.NoPerformance => "Play something first.",
+            CaptureStatus.CapacityExceeded =>
+                "Capture needs more room. Clear a track or start a new session.",
+            CaptureStatus.HistoryTruncated =>
+                "That phrase exceeded the capture buffer. Play a shorter phrase.",
+            _ => string.Empty
+        };
     }
 
     private void OnControllerControlReceived(object? sender, MusicControlEvent control)

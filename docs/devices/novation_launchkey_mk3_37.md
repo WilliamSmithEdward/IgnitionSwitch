@@ -35,6 +35,7 @@ The following observations come from development smoke tests on 2026-10-26. The 
 | Application pad hit presentation | Running build `8d64d95` at approximately 1,348 × 834 logical pixels showed the clicked Kick pad flash amber and settle after release. All sixteen pads and four bars remained visible; the shortcut flyout used aligned columns including Undo/Redo. This is application visual evidence, not physical-pad or timing evidence. |
 | Quantise menu and compact scaling | The Quantise milestone's running build showed an aligned Loop options menu; the recording-grid checkmark switched off and back on without marking musical content unsaved. Native width and height resizing to approximately 1,000 × 700 logical pixels retained all tracks, four bars, sixteen pads and the full status line without scrollbars. The Kick flash filled the resized pad correctly. The Quantise action was disabled for an empty, non-recording track. |
 | Repeat preference in the running app | The Loop milestone's running build displayed a checked Repeat loop menu item. Switching it off changed the header to `4 bars · once`, reopening showed the unchecked state, and switching it back restored `4 bars`. The session remained saved/unchanged. Audio was unavailable, so natural-end playback and physical Loop/LCD behavior remain separate checks. |
+| Current audio verification blocker | During the Loop milestone, read-only Windows endpoint enumeration reported CA DacMagic as NotPresent and no default render endpoint for Console, Multimedia or Communications (`0x80070490`). No audio stream was opened and no system setting was changed. This confirms the observed output-unavailable state; it does not establish a failure of the controller or synthesis engine. |
 | Broader physical playing coverage | Drum-mode lighting/sound and both track-arrow directions are confirmed above. A complete keys, individual pads, pots, wheels and pedal pass, plus broader musical listening, remains incomplete. |
 | Actual pad colors/LCD rendering | Blue Drum-mode lighting is confirmed by William. Muted red Drum lighting, Session colors and LCD appearance still need a visual hardware pass. |
 | Audio latency and device timing | No measured hardware latency or timing benchmark yet. |
@@ -84,7 +85,7 @@ Statuses below describe code currently present. The identity/connection and appl
 | Record | Toggle loop recording when audio is running. | Physical overdub review. |
 | Click | Toggle the application metronome. | Physical confirmation. |
 | Loop | CC118 toggles repeating versus single-pass playback; the Loop options menu has the same Repeat loop preference. Single pass ends at the four-bar boundary, finalizes recording and retains live notes/sustain. Play or Record from End starts at zero. | Physical button/LCD and recording review; variable loop length remains future work. |
-| Capture MIDI | No retrospective capture command. | Rolling note history and capture semantics. |
+| Capture MIDI | CC74 merges the latest retained four-bar live phrase across all tracks as one undoable edit. Track ownership, sustain and held gates are retained; capacity or relevant history loss leaves the project unchanged. The Loop options menu exposes the same action. | Physical button and audible phrase review. |
 | Quantise | CC75 corrects selected-track onsets to sixteenths as one undoable edit, preserving durations. The Loop options menu provides the same action and an optional recording grid. | Physical button and musical review. |
 | Undo / Shift+Undo | Undo / Redo the latest recording part or mixer edit. DAW channel 1 CC108 tracks Shift; channel 16 CC77 invokes the command on press. History is bounded and resets when loading another project. | Physical gesture/recording review and history descriptions. |
 | Scene up/down; Scene Launch | No application scene command. Native chord/menu functions remain device-owned. | Scene/bank navigation and launching. |
@@ -119,6 +120,7 @@ Human MIDI channels are **1–16**. The C# contracts use **0–15**. This differ
 | Pot CC26 | 16 / 15 | Tempo `60 + round(value × 120 / 127)` BPM. |
 | Track left CC103 / right CC102 | 16 / 15 | Selection offset −1 / +1 on press; no action on release. |
 | Play/Stop/Record CC115/116/117 | 16 / 15 | Start/pause/resume toggle / stop and rewind / recording toggle on press. |
+| Capture MIDI CC74 | 16 / 15 | Request retrospective capture of recent live playing on press; Shift retains the primary action. |
 | Quantise CC75 | 16 / 15 | Correct selected-track note onsets on press; Shift retains the same action. |
 | Loop CC118 | 16 / 15 | Toggle repeat/single-pass on press; Shift retains the same primary action. |
 | Click CC76 | 16 / 15 | Metronome toggle on press. |
@@ -213,7 +215,11 @@ top:    64 65 66 67 68 69 70 71
 bottom: 80 81 82 83 84 85 86 87
 ```
 
+The User Guide's Device Select example lights top-row page pads. Its up/down controls choose the previous/next device, while pads select a parameter page. The programmer reference defines both rows' raw notes but does not establish the lower row as pages 9–16. Do not infer that assignment. Device Lock retains the actual device/control bank across track selection; it is more than freezing the interface's selected-track highlight. These are manufacturer roles; the application implementation remains listed in the support table above. [User Guide V6, p.22](https://fael-downloads-prod.focusrite.com/customer/prod/downloads/Launchkey%20MK3%20User%20Guide%20v6%20-%20EN.pdf#page=22)
+
 The same pot CC21–28 data are reused across Device/Volume/Pan/Send modes; the mode report determines their meaning. Continuous-control touch (`9F 0B 7F/00`) and pickup (`9F 0A 7F/00`) are optional hardware features and are not enabled by the app. When touch events are enabled, touch/release use channel 15 CC with values 127/0.
+
+Both features default to disabled on DAW-mode entry. Programmer's Reference V1 does not document a host command that sets a pot's raw pickup target; echoing CC21–28 is therefore unverified. SysEx `08` supplies arbitrary LCD value text, rather than a numeric pickup threshold. A future application takeover mechanism must distinguish the mode and actual parameter target, and must not assume an endless encoder or combine undocumented native pickup behavior with another filter. Native Arp Control Lock and Custom modes retain their hardware ownership. [Programmer's Reference V1, pp.6, 9 and 15](https://fael-downloads-prod.focusrite.com/customer/prod/downloads/launchkey_mk3_programmer_s_reference_guide_v1_en.pdf#page=6)
 
 ### LED reference
 
@@ -307,8 +313,8 @@ Easy Start can expose a Novation onboarding USB drive. That drive is not a MIDI 
 | Bounded input decoding | `src/IgnitionSwitch.Midi/Protocol/MidiMessageParser.cs` |
 | Windows port lifecycle and feedback | `src/IgnitionSwitch.Midi/Devices/LaunchkeyController.cs`, `ControllerSession.cs` |
 | Generic command execution and note routing | `src/IgnitionSwitch.App/Services/StudioSession.cs` |
-| Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: 11 groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, modes/Undo/Shift+Undo/Quantise/Loop and loop-aware feedback, captured Drum routing, immutable pad layouts and deterministic hit feedback. |
-| Application input checks | `tests/IgnitionSwitch.App.Tests`: 15 groups including shared-audio buffer, transport, save-revision, feedback/shutdown, chord bursts, overlapping ownership, modal audition, project replacement, pad-activity mailbox, Undo/Redo, Quantise and single-pass integration. No physical-device I/O is used by these checks. |
+| Automated hardware-independent checks | `tests/IgnitionSwitch.Midi.Tests`: 11 groups covering channel semantics, 20,000 seeded malformed messages, identity rejection, exact packet fixtures/ASCII/ranges, naming, pairing, modes/Undo/Shift+Undo/Quantise/Loop/Capture and loop-aware feedback, captured Drum routing, immutable pad layouts and deterministic hit feedback. |
+| Application input checks | `tests/IgnitionSwitch.App.Tests`: 17 groups including shared-audio buffer, transport, save-revision, feedback/shutdown, chord bursts, overlapping ownership, modal audition, project replacement, pad-activity mailbox, Undo/Redo, Quantise, single-pass and Capture integration, including audio-unavailable input exclusion. No physical-device I/O is used by these checks. |
 
 Run `dotnet run --project tests/IgnitionSwitch.Midi.Tests --no-restore` after the project has been restored. These checks do not open MIDI ports. The initial library/tests passed strict .NET builds with zero diagnostics; rerun verification after relevant changes.
 
