@@ -1,5 +1,21 @@
 (string Name, Func<Task> Run)[] tests =
 [
+    (
+        "Live expression preserves exact neutral audio and validates transient controls",
+        ExpressionTests.NeutralAndValidation
+    ),
+    (
+        "Live modulation and pressure affect pitch and timbre independently",
+        ExpressionTests.MusicalResponse
+    ),
+    (
+        "Opaque live handles preserve sustained ownership and reject stale voices",
+        ExpressionTests.OwnershipAndLifecycle
+    ),
+    (
+        "Expression ramps preserve callback partitions and warm zero allocation",
+        ExpressionTests.PartitionsAndAllocation
+    ),
     ("Scenes own clip content with bounded structural history", SceneTests.ContentAndHistory),
     ("Scene schema migration and total capacity are atomic", SceneTests.PersistenceAndCapacity),
     ("Quantized clip queues preserve independent transport state", SceneTests.QueuesAndTransport),

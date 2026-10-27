@@ -2,38 +2,18 @@ namespace IgnitionSwitch.Core.Audio.Mixing;
 
 internal sealed class SmoothedValue(float initial)
 {
-    private const int RampFrames = 240;
-    private int remaining;
-    private float step;
+    private LinearRamp ramp = new(initial);
 
-    public float Target { get; private set; } = initial;
-    public float Current { get; private set; } = initial;
+    public float Target => ramp.Target;
+    public float Current => ramp.Current;
 
     public void SetTarget(float value, bool immediate)
     {
-        if (immediate)
-        {
-            Target = value;
-            Current = value;
-            remaining = 0;
-        }
-
-        else if (Target != value)
-        {
-            Target = value;
-            step = (value - Current) / RampFrames;
-            remaining = RampFrames;
-        }
+        ramp.SetTarget(value, immediate);
     }
 
     public float Next()
     {
-        if (remaining > 0)
-        {
-            remaining--;
-            Current = remaining == 0 ? Target : Current + step;
-        }
-
-        return Current;
+        return ramp.Next();
     }
 }

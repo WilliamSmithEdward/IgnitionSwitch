@@ -257,6 +257,7 @@ public sealed partial class WorkstationEngine : IDisposable
             ResetPlaybackPosition();
             _held.Clear();
             _voices.Clear();
+            ResetLiveExpression();
             ResetEffects();
 
             foreach (Track track in _tracks)
@@ -326,63 +327,7 @@ public sealed partial class WorkstationEngine : IDisposable
     /// <remarks>At most 64 voices sound at once. Sequenced voices are replaced before live voices; fresh live attacks retain their first 4 ms against sequenced replacement. More than 64 simultaneous live attacks still replace the oldest live voice.</remarks>
     public void NoteOn(int track, int note, int velocity, bool retainForCapture)
     {
-        ValidateTrack(track);
-        ArgumentOutOfRangeException.ThrowIfNegative(note);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(note, 127);
-        ArgumentOutOfRangeException.ThrowIfNegative(velocity);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(velocity, 127);
-
-        if (velocity == 0)
-        {
-            NoteOff(track, note);
-            return;
-        }
-
-        lock (_sync)
-        {
-            ThrowIfDisposed();
-
-            if (_held.Remove((track, note), out HeldNote? previous))
-            {
-                ReleaseHeld(previous);
-            }
-
-            int id = NextVoiceId();
-            AddVoice(CreateVoice(id, track, note, velocity, false));
-            _performance.NoteOn(
-                track,
-                note,
-                velocity,
-                retainForCapture,
-                _recordingQuantizationEnabled,
-                _isPlaying,
-                _absoluteBeat,
-                _tempo / (60 * SampleRate)
-            );
-            HeldNote held = new(
-                id,
-                track,
-                note,
-                velocity,
-                _isRecording && _tracks[track].ActiveSceneId is not null ? _absoluteBeat : null,
-                _recordingQuantizationEnabled,
-                _tracks[track].ActiveSceneId ?? _editingSceneId,
-                _tracks[track].Origin
-            );
-
-            if (_tracks[track].Instrument == InstrumentKind.Drums)
-            {
-                if (_isRecording)
-                {
-                    RecordNote(held, QuantizeBeats);
-                }
-            }
-
-            else
-            {
-                _held[(track, note)] = held;
-            }
-        }
+        _ = BeginLiveNote(track, note, velocity, retainForCapture);
     }
 
     /// <summary>Releases a live MIDI note on every track, including notes held before selection changed.</summary>
@@ -473,6 +418,7 @@ public sealed partial class WorkstationEngine : IDisposable
             _performance.CloseAll();
             _held.Clear();
             _voices.Clear();
+            ResetLiveExpression();
             ResetEffects();
             _pitchRatio = 1;
 
@@ -768,6 +714,7 @@ public sealed partial class WorkstationEngine : IDisposable
             }
 
             _voices.Clear();
+            ResetLiveExpression();
             _held.Clear();
 
             foreach (Track track in _tracks)
@@ -860,6 +807,7 @@ public sealed partial class WorkstationEngine : IDisposable
     {
         if (_tracks[track].Instrument == InstrumentKind.Drums)
         {
+            EndLiveGate(track, note);
             _performance.CloseNote(track, note);
         }
 
@@ -885,6 +833,7 @@ public sealed partial class WorkstationEngine : IDisposable
         {
             if (voice.Id == held.Id)
             {
+                voice.EndLiveGate();
                 voice.Release(_tracks[held.Track].Sound.ReleasePhysical);
             }
         }

@@ -1,12 +1,12 @@
 # Music engine API coverage
 
-Last reconciled: **2026-10-26**, scenes, clip launches, scene-aware recording/Capture and schema 3 persistence. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
+Last reconciled: **2026-10-26**, owner-safe live wheel/pressure expression, alongside scenes and schema 3 persistence. This is the IgnitionSwitch music report; reports for other applications belong in separate files. Review supported behavior, evidence, member counts, and remaining gaps with every implementation commit.
 
 ## Scope and inventory
 
 The in-memory API is `IgnitionSwitch.Core`. Its implementation has no external package dependencies. Windows MIDI, physical controllers, WinUI, and the NAudio output driver are adapters around it, with separate evidence below.
 
-Counts are taken from the generated Release XML documentation, verified for this milestone at `artifacts/scenes-preview/bin/IgnitionSwitch.Core/release/IgnitionSwitch.Core.xml`. Count distinct documented `T:`, `F:`, `M:`, and `P:` entries. Include declared positional-record constructors/properties and enum values. Exclude internal helpers, implicit default constructors, and generated record equality, hashing, deconstruction, and printing conveniences. Explicit source-compatible snapshot `Deconstruct` overloads are declared methods and are included. These counts inventory the declared API; they are not a test-coverage percentage.
+Counts are taken from the generated Release XML documentation, verified for this milestone at `artifacts/expression-preview/bin/IgnitionSwitch.Core/release/IgnitionSwitch.Core.xml`. Count distinct documented `T:`, `F:`, `M:`, and `P:` entries. Include declared positional-record constructors/properties and enum values. Exclude internal helpers, implicit default constructors, and generated record equality, hashing, deconstruction, and printing conveniences. Explicit source-compatible snapshot `Deconstruct` overloads are declared methods and are included. These counts inventory the declared API; they are not a test-coverage percentage.
 
 | Public type | Constants/enum values | Constructors/method overloads | Properties | XML entries including type |
 | --- | ---: | ---: | ---: | ---: |
@@ -17,6 +17,7 @@ Counts are taken from the generated Release XML documentation, verified for this
 | `Domain.ClipState` | 0 | 1 | 2 | 4 |
 | `Domain.DelaySettings` | 0 | 1 | 4 | 6 |
 | `Domain.InstrumentKind` | 4 | 0 | 0 | 5 |
+| `Domain.LiveNoteHandle` | 0 | 0 | 1 | 2 |
 | `Domain.LoopNote` | 0 | 1 | 4 | 6 |
 | `Domain.ParameterAddress` | 0 | 1 | 2 | 4 |
 | `Domain.ParameterDescriptor` | 0 | 3 | 6 | 10 |
@@ -29,14 +30,24 @@ Counts are taken from the generated Release XML documentation, verified for this
 | `Domain.TrackSoundSettings` | 0 | 1 | 7 | 9 |
 | `Domain.TrackState` | 0 | 1 | 6 | 8 |
 | `Persistence.SessionStore` | 1 | 2 | 0 | 4 |
-| `Sequencing.WorkstationEngine` | 5 | 45 | 19 | 70 |
-| **Total: 20 types** | **34** | **66** | **81** | **201** |
+| `Sequencing.WorkstationEngine` | 5 | 47 | 19 | 72 |
+| **Total: 21 types** | **34** | **68** | **82** | **205** |
 
-`WorkstationEngine` declares **69 non-type members**: 45 method overloads, 19 properties and 5 constants. The full documented Core API has 181 non-type entries plus 20 type entries. `NoteRevision` tracks notes and scene metadata/structure independently of mixer targets and transient playback choices; `LaunchRevision` tracks editing/playing/queued choices and solo. `GetClipNotes` returns one detached clip, while `CopyTrackPlaybackStates` fills four value-type states under one lock without allocation. `TrackState.NoteCount` describes the current editing clip. The legacy `TrackSnapshot.Notes` constructor/init/projection targets scene 0 and is empty when that scene is absent; canonical notes live only in `TrackSnapshot.Clips`. Explicit legacy snapshot deconstruction remains source compatible.
+`WorkstationEngine` declares **71 non-type members**: 47 method overloads, 19 properties and 5 constants. The full documented Core API has 184 non-type entries plus 21 type entries. `NoteRevision` tracks notes and scene metadata/structure independently of mixer targets and transient playback choices; `LaunchRevision` tracks editing/playing/queued choices and solo. `GetClipNotes` returns one detached clip, while `CopyTrackPlaybackStates` fills four value-type states under one lock without allocation. `TrackState.NoteCount` describes the current editing clip. The legacy `TrackSnapshot.Notes` constructor/init/projection targets scene 0 and is empty when that scene is absent; canonical notes live only in `TrackSnapshot.Clips`. Explicit legacy snapshot deconstruction remains source compatible.
 
 Scene APIs create, duplicate, rename and delete bounded rows, address clips through `ClipAddress`, queue per-lane or whole-row launches/stops, cancel queued actions and provide transient solo monitoring. Existing selected-track clear and Quantise target the editing scene; `ClearClip` addresses an exact clip independently of selection. History, Quantise, repeat/single-pass transport, idempotent `EndRecording`, Capture and generic parameter methods retain their earlier contracts with scene-aware note ownership.
 
-Project schema 3 saves every scene and its clip notes once, with shared track sound/mixer targets and global effects. Strict version 1 and 2 documents import into scene 0; version 1 receives native dry defaults. Editing/active clip choices, queues, phase, solo, history, smoothing and DSP buffers remain transient. Pad presentation and hardware feedback remain adapters around the engine; animation and MIDI output do not drive sound generation.
+Live expression adds an opaque engine-scoped `LiveNoteHandle` and two methods:
+
+```csharp
+LiveNoteHandle BeginLiveNote(int track, int note, int velocity,
+    bool retainForCapture = true, double modulation = 0, double pressure = 0);
+bool SetLiveExpression(LiveNoteHandle handle, double modulation, double pressure);
+```
+
+`IsValid` describes an issued identity, not current liveness. `SetLiveExpression` rejects default, foreign-engine, superseded, released, finished or stolen gates without creating voices. Initial expression is atomic with note-on; velocity zero follows existing note-off behavior and returns default. Existing void `NoteOn` overloads retain neutral expression. Amounts are finite normalized 0–1 values; these controls do not add persistent parameters, schema fields, Capture automation or history edits.
+
+Project schema 3 saves every scene and its clip notes once, with shared track sound/mixer targets and global effects. Strict version 1 and 2 documents import into scene 0; version 1 receives native dry defaults. Editing/active clip choices, queues, phase, solo, live expression/handles, history, smoothing and DSP buffers remain transient. Pad presentation and hardware feedback remain adapters around the engine; animation and MIDI output do not drive sound generation.
 
 ## Implemented behavior and evidence
 
@@ -46,6 +57,9 @@ Project schema 3 saves every scene and its clip notes once, with shared track so
 | --- | --- | --- | --- |
 | Scene content | Implemented; one initial scene, up to eight ordered stable slot IDs, create/duplicate/rename/delete, four owned clips per row, final-scene protection and total-budget preflight | `SceneTests.ContentAndHistory`, `.PersistenceAndCapacity` | Physical scene workflow; scene reordering and variable clip length |
 | Quantized clip launches | Implemented; four bounded next-bar action slots, atomic row launch, per-lane replacement/cancel/stop, independent local-zero origins and generation-aware eligibility. Empty unarmed clips stop lanes; armed empty clips are recording destinations | `SceneTests.QueuesAndTransport`, `.EmptyRecordingWorkflow`, `.AudioAndPartitions` cover boundaries, lane independence, relaunch, pause/resume, one-pass cancellation, actual audio and callback partitions | Physical Session/scene verification and selectable launch quantization |
+| Live wheel and pressure DSP | Implemented in Core; melodic live wheel vibrato at 5.5 Hz up to ±30 cents, live pressure for all instruments including drums, exact neutral bypass and 5 ms ramps. Pressure moves Tone halfway through its remaining headroom and adds at most 15% gain | `ExpressionTests.MusicalResponse` measures rendered vibrato rate/depth, harmonic brightening, exact pressure ramp/gain endpoint, drum response and unaffected neighboring/loop audio; `.NeutralAndValidation` checks exact neutral output and transient state | Physical wheel/pressure listening and packet traces; expression automation and configurable modulation routing |
+| Expression gate ownership | Implemented in Core; one current engine-scoped live identity per shared track/pitch gate, sustained eligibility through Pause/clip/Undo, rejection after real release/retrigger/finish/steal/reset | `ExpressionTests.OwnershipAndLifecycle`, `.PartitionsAndAllocation` check lifecycle, callback equality, finite audio and warm allocation-free rendering/retargeting | Independent same-pitch source voices and MPE remain outside the current final-owner model |
+| Expression adapters | App uses 512 latest track/pitch owner slots and 16-channel wheel/pressure caches, combines channel/poly pressure by maximum, and uses original channel/handle ownership. MIDI routes retained Drum pressure and zero values across pad-mode changes | `PressureRoutingTests.Routing`; `ExpressionCommandTests.OwnershipAndAudio`, `.LifecycleAndGuards`, `.HotPath` check original/latest ownership, resets, disconnected callbacks, pressure pruning and allocation | Physical pressure mode/channel/zero-release traces and listening |
 | Built-in instruments | Implemented; keys, bass, atmosphere, synthesized drums, velocity, 64-voice limit, Tone/Attack/Release/Drive and drum Tail. Scheduled notes prefer replacing loop voices and preserve fresh live attacks | `AudioTests.Instruments`; `SoundTests.Instruments`; `VoicePriorityTests.LiveAttacks` proves live output under dense scheduled pressure, deterministic replacement and the 64-voice bound | Sparse hardware-miss diagnosis, musical listening and richer presets; more than 64 fresh live attacks still replaces the oldest live voice |
 | Note ownership and release | Implemented; selected/explicit-track note methods, sustain, retrigger, velocity-zero release, 4 ms minimum smooth onset for short taps arriving between render callbacks, immediate all-notes-off | `AudioTests.Release` checks all three melodic instruments, pre-render/early releases, ordinary tails, retriggers, and panic; `StudioSessionTests.Ownership`, `.Sustain` | Physical pedal polarity, rapid scale/chord collisions, simultaneous input sources |
 | Pitch bend | Implemented; normalized −1…1 maps to ±2 semitones for melodic voices | `ValidationTests.Controls` rejects invalid bend; formula in `SynthVoice`/`WorkstationEngine` | A frequency-response assertion and physical wheel pass; recorded bend automation |
@@ -75,19 +89,21 @@ Scene launch choices are transient. Play from stopped starts the editing row; an
 
 Capture uses one shared phrase window. Active editing clips align against their own current origins; inactive/new-row clips retain the common project/free anchor. Capturing into a mixed-origin audible row preserves that mix. Relaunching the entire row intentionally resets every clip to local zero and can change its relative groove; saved launch offsets are not implemented.
 
+Expression retains the existing shared track/pitch final-owner and global-pedal behavior. Core has no MIDI channels; the adapter associates the latest gate with its original channel and combines channel/poly pressure by maximum. Its 512 owner slots and 16-channel caches are bounded. Wheel values remain cached through Stop, modal playing, panic and project load, then reset on disconnect/disposal. Pressure without an owned gate is discarded; new-strike pruning and real-release cleanup prevent stale pressure carrying into unrelated input. Disconnected input/control callbacks are rejected before they can repopulate caches or mutate state. This is live expression, not MPE or independently owned same-pitch voices.
+
 ## Test inventory and physical evidence
 
-The scene milestone defines **37 Core groups**, **17 MIDI groups** and **25 App groups**: **79 groups**. The seven new Core groups are `SceneTests.ContentAndHistory`, `.PersistenceAndCapacity`, `.QueuesAndTransport`, `.RecordingOwnership`, `.EmptyRecordingWorkflow`, `.CaptureAlignment` and `.AudioAndPartitions`. Each contains multiple assertions.
+The expression milestone passed **87 groups**: **41 Core**, **28 App** and **18 MIDI**. The four new Core groups are `ExpressionTests.NeutralAndValidation`, `.MusicalResponse`, `.OwnershipAndLifecycle` and `.PartitionsAndAllocation`; all 37 prior Core groups also pass. App expression evidence is `ExpressionCommandTests.OwnershipAndAudio`, `.LifecycleAndGuards` and `.HotPath`. MIDI pressure ownership/routing is covered by `PressureRoutingTests.Routing`.
 
-The complete `scripts/verify.ps1` run passed all 79 groups, locked restore/build, prettyCSharp and style/analyzer checks at informational severity. Evidence is retained locally in `artifacts/scenes-verification.log`, with build output under `artifacts/scenes-preview`. The generated Core XML inventory was independently read as 201 entries. Run verification with:
+The full `scripts/verify.ps1` run passed locked restore, the WinUI Release/x64 build, all 87 groups, prettyCSharp and style/analyzer validation at informational severity. Local evidence is `artifacts/expression-verification.log`, with output under `artifacts/expression-preview`. The new generated Core XML was independently counted as 205 entries. Run verification with:
 
 ```powershell
 .\scripts\verify.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-Automated results establish the stated code behavior. The scene workspace visual check, physical scene/clip controls and listening remain unverified. Earlier UI observations below apply to their named builds.
+Physical expression controls and musical listening remain unverified. Earlier UI and hardware observations below apply to their named builds, and do not establish pressure packets or end-to-end latency.
 
-The received-input allocation check warms the identical non-inlined batch before measuring 100,000 further hits. Its zero-byte assertion remains strict. This separates steady counter work from a reproduced tiered-JIT/on-stack-replacement first-loop allocation on a two-processor runtime; five fresh constrained processes passed after the warm-up correction. The counter implementation and runtime/CI settings are unchanged. The current Core inventory is 201 documented entries.
+The received-input allocation check warms the identical non-inlined batch before measuring 100,000 further hits. Its zero-byte assertion remains strict. This separates steady counter work from a reproduced tiered-JIT/on-stack-replacement first-loop allocation on a two-processor runtime; five fresh constrained processes passed after the warm-up correction. The counter implementation and runtime/CI settings are unchanged. The current Core inventory is 205 documented entries.
 
 The running Quantise build was resized separately in width and height to approximately 1,000 × 700 logical pixels. All four tracks, four bars, sixteen pads and the complete status line remained visible without scrollbars; the pad flash matched its resized face. The Loop menu aligned its labels, disabled Quantise on an empty non-recording track, and toggled the transient recording grid without marking content unsaved. Sound checks were unavailable during this pass because Windows reported no default playback output.
 
@@ -143,7 +159,7 @@ Capture uses a lazy bounded workspace and value candidates. In a warmed Release/
 | Append a 37-note phrase | 0.0434 ms | 0.154 ms |
 | Already-matching 37-note phrase | 0.0160 ms | Not recorded here |
 
-Retained and explicitly unretained live note-on/off pairs both allocated **136 bytes**, so the value-type history ring added no input allocation in that comparison. A fixed-voice run of 256 callbacks of 480 stereo frames allocated **zero bytes** and produced finite samples. These are isolated Core compute/allocation observations, with warm scratch storage, no audio stream and no MIDI port. Cold initialization, host scheduling, bulk-operation tails, physical input delivery and audible latency remain separate concerns.
+At the earlier Capture milestone, retained and explicitly unretained live note-on/off pairs both allocated **136 bytes**, so the value-type history ring added no input allocation in that comparison. That historical count predates the inline expression fields; the expression benchmark below excludes new voice construction. A fixed-voice run of 256 callbacks of 480 stereo frames allocated **zero bytes** and produced finite samples. These are isolated Core compute/allocation observations, with warm scratch storage, no audio stream and no MIDI port. Cold initialization, host scheduling, bulk-operation tails, physical input delivery and audible latency remain separate concerns.
 
 The sound-parameter milestone compared default audio against the frozen Loop-build Core DLL in an isolated assembly load context. Maximum sample differences across held and released audio were **0** for one voice, **8.94 × 10⁻⁸** for sixteen voices and **2.68 × 10⁻⁷** for sixty-four voices, consistent with changed summation order and below a 10⁻⁶ tolerance. This compares actual earlier synthesis rather than two configurations of the new implementation.
 
@@ -167,7 +183,19 @@ The scene milestone's ignored `artifacts/scene-benchmark/Program.cs` and `SceneB
 
 One thousand `CopyTrackPlaybackStates` calls also allocated zero bytes. These are warmed compute observations, not end-to-end latency measurements.
 
-An 8,192-note project benchmark used two warmups and eight 64-frame callbacks crossing a scene-launch boundary. Without held recording, mean/max CPU was **0.1379/0.1682 ms**, allocating **57,344 bytes** for 512 scheduled voice starts. With 384 held recording replacements, mean/max was **1.9366/8.703 ms**, allocating **122,216 bytes** for starts and finalized note/history data. Launches batch schedule work once; scheduled voice creation and recording finalization still allocate. Warm fixed-voice zero allocation does not describe every onset or recording boundary, and these observed maxima are not deadlines.
+An 8,192-note project benchmark used two warmups and eight 64-frame callbacks crossing a scene-launch boundary. Without held recording, mean/max CPU was **0.1379/0.1682 ms**, allocating **57,344 bytes** for 512 scheduled voice starts. With 384 held recording replacements, mean/max was **1.9366/8.703 ms**, allocating **122,216 bytes** for starts and finalized note/history data. Launches batch schedule work once; scheduled voice creation and recording finalization still allocate. These historical scene-build allocations predate inline expression fields. Warm fixed-voice zero allocation does not describe every onset or recording boundary, and these observed maxima are not deadlines.
+
+The expression benchmark compared actual held/released default audio against the frozen Scenes Core DLL at `artifacts/scenes-preview/bin/IgnitionSwitch.Core/release/IgnitionSwitch.Core.dll`. Maximum sample difference was **zero** at 1, 16 and 64 voices. On .NET 10.0.13, 1,024 warm callbacks preceded 256 measured callbacks of 480 stereo frames per case:
+
+| Voices | Neutral mean CPU per 10 ms audio | Full wheel + pressure mean CPU | Allocated bytes in each case |
+| --- | ---: | ---: | ---: |
+| 1 | 0.04629 ms | 0.05290 ms | 0 |
+| 16 | 0.25555 ms | 0.28071 ms | 0 |
+| 64 | 1.02705 ms | 1.16687 ms | 0 |
+
+All six fixed-voice cases produced finite samples. After three warm passes of the identical update batch, 64,000 `SetLiveExpression` calls took **2.5034 ms total** and allocated **zero bytes**; no timing threshold was asserted. Provenance is the ignored `artifacts/expression-benchmark/Program.cs`, project file and `result.log`. No audio stream or MIDI port was opened. These measurements exclude new voice construction and recording/history events and do not establish physical key-to-sound latency.
+
+`ExpressionCommandTests.HotPath` exercises the production coordinator with six reused wheel/channel/poly-pressure message objects in a 60,000-message batch. Three identical batches warm the path before measurement. The measured batch allocated **zero bytes**, emitted no performance activity, feedback writes or drum-diagnostic updates, and left content/revision/history unchanged. Parsing, message construction, rendering and assertions are outside that allocation measurement. Lifecycle tests also verify stale/finished-owner pressure pruning, cache reset/retention rules and rejection of queued callbacks after disconnect.
 
 ## Initial limits and unimplemented areas
 
@@ -179,11 +207,12 @@ An 8,192-note project benchmark used two warmups and eight 64-frame callbacks cr
 | Clip length | Four bars, sixteen beats per clip; next-bar launch, local-zero restart |
 | Tempo | 60–180 BPM |
 | Quantization | Optional 0.25-beat recording grid, on by default; explicit selected editing-clip onset correction |
-| Simultaneous voices | 64; loop-first replacement with 4 ms fresh-live-attack protection |
+| Simultaneous voices | 64; loop-first replacement with 4 ms fresh-live-attack protection; two inline expression ramps per voice |
+| Live expression | Normalized wheel/pressure per issued gate, 5 ms ramps; melodic 5.5 Hz vibrato up to ±30 cents; pressure brightness and ≤15% gain; transient |
 | Recorded notes | 2,048 per track/scene clip; 8,192 total. `MaximumNotesPerTrack` retains its legacy name for the per-clip limit |
 | Stored note range | MIDI 0–127, velocity 1–127, onset 0 ≤ beat < 16, positive duration ≤16 beats |
 | Project file | Writes version 3 JSON; strict version 1/2 import into scene 0; at most 4 MiB |
 | Undo history | At most 64 edit steps and 32,768 retained note deltas; not persisted |
 | Retrospective history | At most 8,192 completed performance notes and 512 held gates; current phrase, four-bar window; not persisted |
 
-No VST hosting, audio import/export, song arranger, synthesized aftertouch/modulation response, MIDI learn, external instrument routing, or project-to-hardware MIDI clock is implemented. Native Launchkey scale/chord/arp features can send ordinary performed notes, but the application does not mirror or synchronize their settings. Saved projects retain all scene metadata and clip notes, shared mixer/sound targets and effect settings. Editing scene, active/queued clips, local phase, solo, device/track selection and lock, metronome, recording-grid/repeat preferences, retrospective buffers, history, DSP buffers and continuous pitch/sustain automation are not persisted. Remaining controller work is tracked in [the production-polish goal](../production_polish.md).
+No VST hosting, audio import/export, song arranger, expression automation, MPE, configurable modulation matrix, MIDI learn, external instrument routing, or project-to-hardware MIDI clock is implemented. Native Launchkey scale/chord/arp features can send ordinary performed notes, but the application does not mirror or synchronize their settings. Saved projects retain all scene metadata and clip notes, shared mixer/sound targets and effect settings. Editing scene, active/queued clips, local phase, solo, device/track selection and lock, metronome, recording-grid/repeat preferences, retrospective buffers, live expression/handles, history, DSP buffers and continuous pitch/sustain automation are not persisted. Remaining controller work is tracked in [the production-polish goal](../production_polish.md).

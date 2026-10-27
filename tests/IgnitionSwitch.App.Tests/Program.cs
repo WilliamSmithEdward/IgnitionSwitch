@@ -3,6 +3,18 @@ using IgnitionSwitch.App;
 (string Name, Action Run)[] tests =
 [
     (
+        "Live wheel and pressure follow current original-channel gates without affecting other owners",
+        ExpressionCommandTests.OwnershipAndAudio
+    ),
+    (
+        "Expression lifecycle and invalid-input guards preserve transient state and sustained ownership",
+        ExpressionCommandTests.LifecycleAndGuards
+    ),
+    (
+        "High-rate expression control stays allocation-free in the coordinator without feedback writes",
+        ExpressionCommandTests.HotPath
+    ),
+    (
         "Scene editing, copies, exact clearing and structural history retain all rows",
         SceneCommandTests.EditingAndHistory
     ),

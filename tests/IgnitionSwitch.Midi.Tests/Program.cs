@@ -1,6 +1,10 @@
 (string Name, Action Run)[] tests =
 [
     (
+        "Owned Drum pressure follows retained pads without inventing notes or accepting aliases",
+        PressureRoutingTests.Routing
+    ),
+    (
         "Session pads, scenes and context buttons preserve native modes and alias guards",
         SessionControlMappingTests.Commands
     ),

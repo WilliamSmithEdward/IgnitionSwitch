@@ -7,7 +7,7 @@ This is an early working foundation. The Launchkey 37 MK3 comes first; hardware 
 ## The first workspace
 
 - Four tracks: velvet keys, round bass, soft atmosphere, and synthesized drums.
-- Velocity-sensitive playing, sustain, pitch bend, a metronome, and quantized loop recording.
+- Velocity-sensitive playing, sustain, pitch bend, wheel vibrato, pad pressure, a metronome, and quantized loop recording.
 - Track gain, mute, stereo pan, master volume, and tempo controls.
 - Eight instrument controls, real echo and room sends, and a compact Sound inspector.
 - A focused loop view, sixteen on-screen drum pads, and resize handles for both workspace splits.
@@ -18,9 +18,9 @@ This is an early working foundation. The Launchkey 37 MK3 comes first; hardware 
 - Save and reopen projects as `.ignition.json` files.
 - Launchkey discovery, verified model identification, mapped transport and session controls, pad feedback, and LCD track labels.
 
-The engine has four tracks, four bars per clip, 60–180 BPM, 64 simultaneous voices, up to eight scenes, and limits of 2,048 notes per clip and 8,192 notes across the project. VST hosting, audio import/export, a song arranger, aftertouch synthesis, and synchronization with the hardware arpeggiator's MIDI clock are future work.
+The engine has four tracks, four bars per clip, 60–180 BPM, 64 simultaneous voices, up to eight scenes, and limits of 2,048 notes per clip and 8,192 notes across the project. VST hosting, audio import/export, a song arranger, recorded expression automation, and synchronization with the hardware arpeggiator's MIDI clock are future work.
 
-The scene/clip milestone passes the Release/x64 solution build, 79 automated groups, formatting and informational analyzer checks. Runtime visual checks and physical Launchkey scene tests are still pending; automated checks alone do not establish a verified production workflow.
+The current build passes the Release/x64 solution build, 87 automated groups, formatting and informational analyzer checks. Runtime visual checks and physical Launchkey scene/expression tests are still pending; automated checks alone do not establish a verified production workflow.
 
 ## Build and run
 
@@ -62,6 +62,8 @@ Drag the handle beside Tracks to change its width, or the handle between Loop an
 Open **Sound** to adjust the selected instrument, Echo or Room. Instrument controls are Tone, Attack, Release (Tail for drums), Drive, Pan, Delay send, Reverb send and Level. Echo and Room each have four effect controls followed by the four track sends. These settings are saved with the project; older version 1 projects open with their original dry sound.
 
 The Launchkey's **Device** pots follow the same Sound target. Hold **Device Select** and use ▲/▼ to choose Instrument, Echo or Room; the first top-row page pad is lit because each currently has one page. **Device Lock** retains the actual instrument across track changes. **Volume** maps pots 1–4 to track levels, 5 to master, 6 to tempo, and 7–8 to effect returns. **Pan**, **Send A** and **Send B** map the first four pots to the corresponding track controls. Absolute pots use pickup: turn through the existing value before taking over; the LCD indicates the required direction. Custom modes remain hardware-owned.
+
+The **modulation wheel** adds gentle vibrato to live melodic notes. **Pad pressure** brightens live sounds and adds a small level lift, using the Launchkey's Channel or Poly aftertouch setting. These gestures follow the notes you played across track changes. Wheel position carries across Stop and project loading, and resets on controller disconnection. Pressure clears with its playing ownership. Expression is transient; projects and Capture retain notes and saved sound settings without recording wheel or pressure automation. Physical wheel, pressure and native Strum behavior still need verification.
 
 The app uses the Windows default audio output. The Launchkey sends MIDI and has no sound engine of its own.
 

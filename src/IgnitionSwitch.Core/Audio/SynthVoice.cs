@@ -1,3 +1,4 @@
+using IgnitionSwitch.Core.Audio.Mixing;
 using IgnitionSwitch.Core.Domain;
 using IgnitionSwitch.Core.Sequencing;
 
@@ -11,14 +12,14 @@ internal sealed class SynthVoice(
     InstrumentKind instrument,
     bool isLoop,
     double attackSeconds,
-    double releasePhysical
+    double releasePhysical,
+    long liveGateId = 0
 )
 {
     private const int MinimumOnsetFrames = WorkstationEngine.SampleRate / 250;
     private readonly InstrumentKind _instrument = instrument;
     private readonly double _frequency = 440 * Math.Pow(2, (note - 69) / 12.0);
     private readonly float _gain = (float)Math.Pow(velocity / 127.0, 1.4) * 0.17f;
-    private readonly int _note = note;
     private long _age;
     private long _releaseAge = -1;
     private float _releaseLevel;
@@ -30,12 +31,38 @@ internal sealed class SynthVoice(
     private double _drumTail = instrument == InstrumentKind.Drums ? releasePhysical : 1;
     private float _toneLow;
     private int _clipFadeFrames = -1;
+    private readonly long _liveGateId = liveGateId;
+    private bool _liveGateActive = !isLoop && liveGateId != 0;
+    private LinearRamp _modulation = new(0);
+    private LinearRamp _pressure = new(0);
 
     public int Id { get; } = id;
     public int Track { get; } = track;
+    public int Note { get; } = note;
     public bool IsLoop { get; } = isLoop;
     public bool IsFinished { get; private set; }
+    public bool NeedsModulation =>
+        _instrument != InstrumentKind.Drums
+            && (_modulation.Current != 0 || _modulation.Target != 0);
     public bool IsProtectedLiveAttack => !IsLoop && _age < MinimumOnsetFrames;
+
+    public bool MatchesLiveGate(long gateId)
+    {
+        return _liveGateActive && !IsFinished && gateId == _liveGateId;
+    }
+
+    public void SetLiveExpression(float modulation, float pressure)
+    {
+        _modulation.SetTarget(_instrument == InstrumentKind.Drums ? 0 : modulation, false);
+        _pressure.SetTarget(pressure, false);
+    }
+
+    public void EndLiveGate()
+    {
+        _liveGateActive = false;
+        _modulation.SetTarget(0, false);
+        _pressure.SetTarget(0, false);
+    }
 
     public void Release(double? releaseSeconds = null)
     {
@@ -65,11 +92,30 @@ internal sealed class SynthVoice(
         }
     }
 
-    public float Render(double pitchRatio, float tone, float drive, double drumTail)
+    public float Render(
+        double pitchRatio,
+        float tone,
+        float drive,
+        double drumTail,
+        double vibratoRatio = 1
+    )
     {
         if (_releasePending && _age >= MinimumOnsetFrames)
         {
             Release();
+        }
+
+        float modulation = _modulation.Next();
+        float pressure = _pressure.Next();
+
+        if (modulation != 0)
+        {
+            pitchRatio *= 1 + ((vibratoRatio - 1) * modulation);
+        }
+
+        if (pressure != 0)
+        {
+            tone += (1 - tone) * pressure * 0.5f;
         }
 
         double seconds = (double)_age / WorkstationEngine.SampleRate;
@@ -83,7 +129,7 @@ internal sealed class SynthVoice(
             _noise ^= _noise >> 17;
             _noise ^= _noise << 5;
             double noise = ((_noise & 65535) / 32767.5) - 1;
-            wave = _note switch
+            wave = Note switch
             {
                 36 or 35 => Math.Sin(
                     2 * Math.PI * ((47 * seconds) + (2.2 * (1 - Math.Exp(-seconds * 35))))
@@ -148,6 +194,11 @@ internal sealed class SynthVoice(
             {
                 IsFinished = true;
             }
+        }
+
+        if (pressure != 0)
+        {
+            envelope *= 1 + (pressure * 0.15f);
         }
 
         _age++;

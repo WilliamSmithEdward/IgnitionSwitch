@@ -82,6 +82,7 @@ internal sealed partial class StudioSession : IDisposable
                 return;
             }
 
+            ForgetExpressionOwner(track, note);
             Engine.NoteOn(track, note, velocity, Audio.IsRunning);
 
             if (previewOwners.Add((track, note)))
@@ -520,7 +521,7 @@ internal sealed partial class StudioSession : IDisposable
             Controller.InputReceived -= OnInputReceived;
             Controller.ControlReceived -= OnControlReceived;
             Controller.StatusChanged -= OnControllerStatusChanged;
-            ClearPerformanceState();
+            ClearPerformanceState(true);
         }
 
         try
@@ -570,6 +571,7 @@ internal sealed partial class StudioSession : IDisposable
             if (!Controller.IsConnected)
             {
                 StopCore();
+                Array.Clear(channelModulation);
             }
         }
     }
@@ -578,7 +580,12 @@ internal sealed partial class StudioSession : IDisposable
     {
         lock (inputLock)
         {
-            if (disposed || !input.SourcePerformance)
+            if (
+                disposed
+                || !Controller.IsConnected
+                || !input.SourcePerformance
+                || !IsValidPerformanceInput(input)
+            )
             {
                 return;
             }
@@ -593,7 +600,7 @@ internal sealed partial class StudioSession : IDisposable
     {
         lock (inputLock)
         {
-            if (disposed || !double.IsFinite(control.Value))
+            if (disposed || !Controller.IsConnected || !double.IsFinite(control.Value))
             {
                 return;
             }
@@ -629,7 +636,7 @@ internal sealed partial class StudioSession : IDisposable
                 noteOwners[key] = track;
                 activeNoteOwners[(track * 128) + input.Number]++;
                 SustainTrackIfNeeded(track);
-                Engine.NoteOn(track, input.Number, input.Value, Audio.IsRunning);
+                BeginExpressiveNote(input.Channel, track, input.Number, input.Value);
 
                 if (input.Channel == 9)
                 {
@@ -665,6 +672,18 @@ internal sealed partial class StudioSession : IDisposable
                 SetPedal(input.Value >= 64);
                 break;
 
+            case MidiInputKind.ControlChange when input.Number == 1:
+                SetChannelModulation(input.Channel, input.Value / 127.0);
+                break;
+
+            case MidiInputKind.ChannelAftertouch:
+                SetChannelPressure(input.Channel, input.Value / 127.0);
+                break;
+
+            case MidiInputKind.PolyphonicAftertouch:
+                SetPolyphonicPressure(input.Channel, input.Number, input.Value / 127.0);
+                break;
+
             case MidiInputKind.ControlChange when input.Number is 120 or 123:
                 Engine.AllNotesOff();
                 ClearPerformanceState();
@@ -678,8 +697,6 @@ internal sealed partial class StudioSession : IDisposable
 
             case MidiInputKind.ControlChange:
             case MidiInputKind.ProgramChange:
-            case MidiInputKind.PolyphonicAftertouch:
-            case MidiInputKind.ChannelAftertouch:
             case MidiInputKind.Clock:
             case MidiInputKind.Start:
             case MidiInputKind.Continue:
@@ -883,6 +900,7 @@ internal sealed partial class StudioSession : IDisposable
             }
 
             sustainedTracks.Clear();
+            ClearReleasedExpressionOwners();
         }
     }
 
@@ -925,7 +943,13 @@ internal sealed partial class StudioSession : IDisposable
 
     private bool ReleaseNoteOwner((int Channel, int Note) key)
     {
-        return noteOwners.Remove(key, out int track) && ReleasePerformanceOwner(track, key.Note);
+        if (!noteOwners.Remove(key, out int track))
+        {
+            return false;
+        }
+
+        ReleaseExpressionOwner(track, key.Note, key.Channel);
+        return ReleasePerformanceOwner(track, key.Note);
     }
 
     private bool ReleasePerformanceOwner(int track, int note)
@@ -962,7 +986,17 @@ internal sealed partial class StudioSession : IDisposable
         ArgumentOutOfRangeException.ThrowIfGreaterThan(note, 127);
     }
 
-    private void ClearPerformanceState()
+    private static bool IsValidPerformanceInput(MidiInputEvent input)
+    {
+        return input.Channel is >= 0
+            and < 16 && input.Number is >= 0
+            and <= 127
+                && (input.Kind != MidiInputKind.ChannelAftertouch || input.Number == 0)
+                && input.Value >= 0
+                && input.Value <= (input.Kind == MidiInputKind.PitchBend ? 16383 : 127);
+    }
+
+    private void ClearPerformanceState(bool resetModulation = false)
     {
         for (int note = 0; note < activePadFeedback.Length; note++)
         {
@@ -973,6 +1007,7 @@ internal sealed partial class StudioSession : IDisposable
         }
 
         noteOwners.Clear();
+        ClearExpressionState(resetModulation);
         previewOwners.Clear();
         Array.Clear(activeNoteOwners);
         Array.Clear(activePadFeedback);

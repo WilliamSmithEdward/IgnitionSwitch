@@ -11,7 +11,14 @@ public sealed partial class WorkstationEngine
     private readonly float[] _liveMono = new float[TrackCount];
     private readonly float[] _sequencedMono = new float[TrackCount];
 
-    private SynthVoice CreateVoice(int id, int track, int note, int velocity, bool loop)
+    private SynthVoice CreateVoice(
+        int id,
+        int track,
+        int note,
+        int velocity,
+        bool loop,
+        long liveGateId = 0
+    )
     {
         Track target = _tracks[track];
         return new(
@@ -22,7 +29,8 @@ public sealed partial class WorkstationEngine
             target.Instrument,
             loop,
             target.Sound.AttackSeconds,
-            target.Sound.ReleasePhysical
+            target.Sound.ReleasePhysical,
+            liveGateId
         );
     }
 
@@ -42,6 +50,9 @@ public sealed partial class WorkstationEngine
             anySolo |= lane.IsSolo;
         }
 
+        double vibratoRatio = AdvanceModulation();
+        bool modulationRequested = false;
+
         for (int voiceIndex = _voices.Count - 1; voiceIndex >= 0; voiceIndex--)
         {
             SynthVoice voice = _voices[voiceIndex];
@@ -51,8 +62,11 @@ public sealed partial class WorkstationEngine
                 _pitchRatio,
                 sound.Tone.Current,
                 sound.Drive.Current,
-                sound.ReleasePhysical
+                sound.ReleasePhysical,
+                vibratoRatio
             );
+
+            modulationRequested |= !voice.IsFinished && voice.NeedsModulation;
 
             if (!track.IsMuted && (!anySolo || track.IsSolo))
             {
@@ -72,6 +86,8 @@ public sealed partial class WorkstationEngine
                 _voices.RemoveAt(voiceIndex);
             }
         }
+
+        _modulationRequested = modulationRequested;
 
         float dryLeft = 0;
         float dryRight = 0;
